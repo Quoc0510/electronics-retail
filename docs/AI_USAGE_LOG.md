@@ -22,15 +22,18 @@ Trước khi commit phần do AI sinh, tự kiểm tra:
 
 ## Nhật ký
 
-| Ngày       | Tính năng | Công cụ     | Phạm vi và prompt chính                                | Phần AI sinh                  | Phần tự sửa / kiểm chứng | Commit   |
-| ---------- | --------- | ----------- | ------------------------------------------------------ | ----------------------------- | ------------------------ | -------- |
-| 21/10/2026 | F00       | Claude Code | Dựng monorepo backend/client/admin, ESLint, CI, Prisma | Toàn bộ khung dự án, test mẫu | _(điền khi review)_      | _(điền)_ |
+| Ngày       | Tính năng | Công cụ     | Phạm vi và prompt chính                                                | Phần AI sinh                   | Phần tự sửa / kiểm chứng                                   | Commit   |
+| ---------- | --------- | ----------- | ---------------------------------------------------------------------- | ------------------------------ | ---------------------------------------------------------- | -------- |
+| 21/10/2026 | F00       | Claude Code | Dựng monorepo backend/client/admin, ESLint, CI, Prisma                 | Toàn bộ khung dự án, test mẫu  | _(điền khi review)_                                        | _(điền)_ |
+| 21/10/2026 | F00-F07   | Claude Code | Giai đoạn 1: SRS, SDD, từ điển dữ liệu, schema Prisma, migration, seed | Toàn bộ tài liệu, schema, seed | Kiểm tra migration và ràng buộc CHECK trên PostgreSQL thật | _(điền)_ |
 
 ## Lỗi / ảo giác của AI đã phát hiện và sửa
 
 Cần ≥ 5 mục kèm phân tích nguyên nhân và commit sửa (mức xuất sắc).
 
-| #   | Ngày       | Mô tả lỗi                                                                                             | Nguyên nhân                                                  | Cách sửa / commit                    |
-| --- | ---------- | ----------------------------------------------------------------------------------------------------- | ------------------------------------------------------------ | ------------------------------------ |
-| 1   | 21/10/2026 | `eslint@10` xung đột với `eslint-plugin-react` (chưa hỗ trợ ESLint 10)                                | AI chọn phiên bản mới nhất mà không kiểm tra peer dependency | Hạ xuống ESLint 9                    |
-| 2   | 21/10/2026 | Dùng `err.flatten()` của Zod, đã deprecated ở Zod 4; comment ghi Express 4 trong khi đã cài Express 5 | Kiến thức của AI theo phiên bản cũ                           | Đổi sang `flattenError`, sửa comment |
+| #   | Ngày       | Mô tả lỗi                                                                                             | Nguyên nhân                                                                                               | Cách sửa / commit                                     |
+| --- | ---------- | ----------------------------------------------------------------------------------------------------- | --------------------------------------------------------------------------------------------------------- | ----------------------------------------------------- |
+| 1   | 21/10/2026 | `eslint@10` xung đột với `eslint-plugin-react` (chưa hỗ trợ ESLint 10)                                | AI chọn phiên bản mới nhất mà không kiểm tra peer dependency                                              | Hạ xuống ESLint 9                                     |
+| 2   | 21/10/2026 | Dùng `err.flatten()` của Zod, đã deprecated ở Zod 4; comment ghi Express 4 trong khi đã cài Express 5 | Kiến thức của AI theo phiên bản cũ                                                                        | Đổi sang `flattenError`, sửa comment                  |
+| 3   | 21/10/2026 | Seed báo `Cannot read properties of undefined (reading upsert)`                                       | Prisma Client được sinh khi schema còn trống, AI không nhắc chạy lại `prisma generate` sau khi thêm model | Chạy `prisma generate`; ghi vào README                |
+| 4   | 21/10/2026 | Container PostgreSQL không chạy, rồi kết nối nhầm vào DB khác                                         | AI giả định cổng 5432 và 5433 còn trống, thực tế máy có PostgreSQL khác dùng hai cổng này                 | Đổi cổng host sang 54320 trong docker-compose và .env |

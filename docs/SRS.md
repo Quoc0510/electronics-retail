@@ -1,0 +1,177 @@
+# Đặc tả yêu cầu phần mềm (SRS) - TechStore
+
+Phục vụ rubric TC2.1 (phân tích nghiệp vụ, đặc tả yêu cầu) và TC1 (KPI). Mã tính năng `Fxx` khớp với [FEATURES.md](FEATURES.md).
+
+## 1. Giới thiệu
+
+**Mục tiêu:** xây dựng website bán thiết bị điện tử (điện thoại, laptop, máy tính bảng, phụ kiện, đồng hồ thông minh) cho phép khách hàng duyệt, tìm kiếm, đặt hàng trực tuyến và cho phép quản trị viên vận hành cửa hàng.
+
+**Sản phẩm đầu ra:** Backend REST API, Frontend Client (khách hàng), Frontend Admin (quản trị), triển khai trên môi trường staging công khai.
+
+### 1.1 Phạm vi
+
+| Làm                                                            | Không làm (ngoài phạm vi)                          |
+| -------------------------------------------------------------- | -------------------------------------------------- |
+| Đăng ký/đăng nhập, phân quyền khách hàng và quản trị viên      | Đăng nhập bằng Google/Facebook                     |
+| Quản lý danh mục, thương hiệu, sản phẩm, tồn kho               | Quản lý nhập hàng, nhà cung cấp, kế toán           |
+| Tìm kiếm, lọc, sắp xếp, phân trang sản phẩm                    | Gợi ý sản phẩm bằng học máy                        |
+| Giỏ hàng, đặt hàng thanh toán khi nhận hàng (COD)              | Thanh toán trực tuyến (chỉ xem xét ở F11)          |
+| Theo dõi và quản lý trạng thái đơn hàng                        | Tích hợp đơn vị vận chuyển thật (tính phí cố định) |
+| Dashboard thống kê cho quản trị viên                           | Ứng dụng di động native                            |
+| Đánh giá, yêu thích, mã giảm giá (F08, F09 - nếu đủ thời gian) | Chat trực tuyến với khách hàng                     |
+
+### 1.2 Tác nhân (actor)
+
+| Tác nhân       | Mô tả                                                              |
+| -------------- | ------------------------------------------------------------------ |
+| Khách vãng lai | Chưa đăng nhập: xem, tìm kiếm sản phẩm, đăng ký, đăng nhập         |
+| Khách hàng     | Đã đăng nhập: có giỏ hàng, đặt hàng, xem đơn, đánh giá             |
+| Quản trị viên  | Quản lý toàn bộ danh mục, sản phẩm, đơn hàng, người dùng, thống kê |
+
+### 1.3 Chân dung người dùng chính
+
+- **Khách hàng:** người 18–40 tuổi, quen mua sắm trực tuyến, cần so sánh giá và thông số nhanh, ưu tiên thanh toán khi nhận hàng vì chưa tin tưởng chuyển khoản trước.
+- **Chủ cửa hàng nhỏ (quản trị viên):** vừa bán trực tiếp vừa bán trực tuyến, cần một công cụ đơn giản để cập nhật giá, tồn kho và xử lý đơn mỗi ngày mà không cần kỹ năng kỹ thuật.
+
+## 2. Yêu cầu chức năng (User story và Acceptance Criteria)
+
+Mức ưu tiên theo MoSCoW: **M** (Must), **S** (Should), **C** (Could).
+
+### F01 - Xác thực và phân quyền
+
+| ID    | User story                                                               | Ưu tiên | Acceptance criteria                                                                                                                                                                                                                     |
+| ----- | ------------------------------------------------------------------------ | ------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| US-01 | Là khách vãng lai, tôi muốn đăng ký tài khoản để mua hàng                | M       | AC1: email đúng định dạng và chưa tồn tại. AC2: mật khẩu ≥ 8 ký tự, có cả chữ và số. AC3: đăng ký thành công thì tự đăng nhập. AC4: email trùng trả lỗi 409 với thông báo rõ ràng. AC5: tài khoản mới luôn có vai trò khách hàng.       |
+| US-02 | Là người dùng, tôi muốn đăng nhập để sử dụng chức năng cá nhân           | M       | AC1: đúng email và mật khẩu thì nhận access token và refresh token. AC2: sai thông tin trả thông báo chung, không tiết lộ email có tồn tại hay không. AC3: tài khoản bị khóa không đăng nhập được. AC4: giới hạn 10 lần thử/15 phút/IP. |
+| US-03 | Là người dùng, tôi muốn phiên đăng nhập được duy trì và có thể đăng xuất | M       | AC1: access token hết hạn sau 15 phút, tự làm mới bằng refresh token (7 ngày). AC2: đăng xuất thu hồi refresh token, token cũ không dùng lại được. AC3: token sai hoặc hết hạn trả 401.                                                 |
+| US-04 | Là khách hàng, tôi muốn quản lý hồ sơ, đổi mật khẩu và sổ địa chỉ        | M       | AC1: sửa họ tên, số điện thoại. AC2: đổi mật khẩu cần nhập đúng mật khẩu cũ. AC3: thêm/sửa/xóa địa chỉ, tối đa một địa chỉ mặc định. AC4: số điện thoại đúng định dạng Việt Nam (10 số, bắt đầu bằng 0).                                |
+| US-05 | Là hệ thống, chỉ quản trị viên được vào chức năng quản trị               | M       | AC1: mọi API `/api/admin/*` trả 401 nếu chưa đăng nhập, 403 nếu là khách hàng. AC2: trang Admin chuyển về đăng nhập nếu không phải quản trị viên.                                                                                       |
+
+### F02 - Danh mục và thương hiệu
+
+| ID    | User story                                               | Ưu tiên | Acceptance criteria                                                                                                                                               |
+| ----- | -------------------------------------------------------- | ------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| US-06 | Là quản trị viên, tôi muốn thêm/sửa/ẩn danh mục sản phẩm | M       | AC1: tên danh mục duy nhất, slug tự sinh từ tên. AC2: danh mục đang có sản phẩm không được xóa cứng (trả 409), chỉ được ẩn. AC3: danh mục ẩn không hiện ở Client. |
+| US-07 | Là quản trị viên, tôi muốn quản lý thương hiệu           | M       | AC1: tên thương hiệu duy nhất. AC2: không xóa cứng thương hiệu đang có sản phẩm. AC3: có thể kèm logo.                                                            |
+
+### F03 - Sản phẩm
+
+| ID    | User story                                                                  | Ưu tiên | Acceptance criteria                                                                                                                                                                                                                                                           |
+| ----- | --------------------------------------------------------------------------- | ------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| US-08 | Là quản trị viên, tôi muốn thêm và sửa sản phẩm                             | M       | AC1: bắt buộc tên, SKU, danh mục, thương hiệu, giá, tồn kho. AC2: SKU duy nhất. AC3: giá > 0; giá khuyến mãi (nếu có) < giá gốc. AC4: tồn kho là số nguyên ≥ 0. AC5: nhập thông số kỹ thuật dạng cặp tên - giá trị. AC6: tối đa 6 ảnh, mỗi ảnh ≤ 2MB, định dạng jpg/png/webp. |
+| US-09 | Là quản trị viên, tôi muốn ẩn/hiện sản phẩm và tìm sản phẩm trong danh sách | M       | AC1: sản phẩm ẩn không hiện và không mua được ở Client. AC2: sản phẩm đã có trong đơn hàng không bị xóa cứng. AC3: danh sách Admin có tìm theo tên/SKU, lọc theo danh mục, phân trang.                                                                                        |
+
+### F04 - Duyệt và tìm sản phẩm (Client)
+
+| ID    | User story                                                  | Ưu tiên | Acceptance criteria                                                                                                                                                                                     |
+| ----- | ----------------------------------------------------------- | ------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| US-10 | Là khách, tôi muốn xem trang chủ có sản phẩm nổi bật và mới | M       | AC1: hiển thị sản phẩm mới nhất và các danh mục. AC2: danh sách rỗng hiển thị thông báo thân thiện. AC3: có trạng thái đang tải và trạng thái lỗi mạng.                                                 |
+| US-11 | Là khách, tôi muốn lọc và sắp xếp sản phẩm theo danh mục    | M       | AC1: lọc theo danh mục, thương hiệu, khoảng giá. AC2: sắp xếp theo mới nhất, giá tăng, giá giảm. AC3: phân trang 12 sản phẩm/trang, hiển thị tổng số kết quả. AC4: bộ lọc nằm trên URL để chia sẻ được. |
+| US-12 | Là khách, tôi muốn tìm sản phẩm theo từ khóa                | M       | AC1: tìm theo tên không phân biệt hoa thường. AC2: không có kết quả thì gợi ý bỏ bớt bộ lọc. AC3: từ khóa rỗng trả toàn bộ danh sách.                                                                   |
+| US-13 | Là khách, tôi muốn xem chi tiết sản phẩm                    | M       | AC1: hiển thị ảnh, giá (kèm giá gốc gạch ngang nếu đang khuyến mãi), thông số, mô tả. AC2: hiển thị "Còn hàng" hoặc "Hết hàng". AC3: sản phẩm không tồn tại hoặc đã ẩn trả trang 404.                   |
+
+### F05 - Giỏ hàng
+
+| ID    | User story                                                     | Ưu tiên | Acceptance criteria                                                                                                                                                                                                                              |
+| ----- | -------------------------------------------------------------- | ------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
+| US-14 | Là khách hàng, tôi muốn thêm sản phẩm vào giỏ                  | M       | AC1: cần đăng nhập, chưa đăng nhập thì chuyển tới trang đăng nhập rồi quay lại. AC2: thêm sản phẩm đã có thì cộng dồn số lượng. AC3: không vượt quá tồn kho, vượt thì báo rõ số còn lại. AC4: biểu tượng giỏ trên header hiển thị tổng số lượng. |
+| US-15 | Là khách hàng, tôi muốn sửa số lượng và xóa sản phẩm trong giỏ | M       | AC1: số lượng tối thiểu 1, tối đa theo tồn kho. AC2: tổng tiền cập nhật ngay. AC3: giỏ trống hiển thị gợi ý quay lại mua sắm. AC4: sản phẩm bị ẩn hoặc hết hàng được đánh dấu rõ trong giỏ.                                                      |
+
+### F06 - Đặt hàng (COD)
+
+| ID    | User story                                                   | Ưu tiên | Acceptance criteria                                                                                                                                                                                                                                                                                                                                                                                                                                            |
+| ----- | ------------------------------------------------------------ | ------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| US-16 | Là khách hàng, tôi muốn đặt hàng và thanh toán khi nhận hàng | M       | AC1: chọn hoặc nhập địa chỉ giao hàng. AC2: xem lại sản phẩm, phí vận chuyển, tổng tiền trước khi xác nhận. AC3: đặt thành công tạo đơn trạng thái PENDING với mã đơn duy nhất, trừ tồn kho, xóa giỏ. AC4: nếu một sản phẩm hết hàng tại thời điểm đặt thì không tạo đơn nào và báo rõ sản phẩm nào. AC5: thao tác trừ kho và tạo đơn là một transaction (cùng thành công hoặc cùng thất bại). AC6: đặt hàng hai lần liên tiếp do bấm đúp không tạo đơn trùng. |
+
+### F07 - Quản lý đơn hàng
+
+| ID    | User story                                                          | Ưu tiên | Acceptance criteria                                                                                                                                                                                                     |
+| ----- | ------------------------------------------------------------------- | ------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| US-17 | Là khách hàng, tôi muốn xem lịch sử đơn hàng và theo dõi trạng thái | M       | AC1: danh sách đơn của riêng mình, mới nhất trước. AC2: chi tiết đơn có sản phẩm, giá lúc đặt, địa chỉ, dòng thời gian trạng thái. AC3: không xem được đơn của người khác (trả 404).                                    |
+| US-18 | Là khách hàng, tôi muốn hủy đơn khi chưa được xác nhận              | M       | AC1: chỉ hủy được khi đơn ở trạng thái PENDING. AC2: hủy thì hoàn lại tồn kho. AC3: lưu lý do hủy.                                                                                                                      |
+| US-19 | Là quản trị viên, tôi muốn xem và cập nhật trạng thái đơn hàng      | M       | AC1: danh sách lọc theo trạng thái, tìm theo mã đơn, phân trang. AC2: chỉ chuyển trạng thái theo luồng hợp lệ (BR-06), chuyển sai trả 400. AC3: mỗi lần đổi trạng thái được ghi lịch sử. AC4: hủy đơn hoàn lại tồn kho. |
+| US-20 | Là quản trị viên, tôi muốn in phiếu đơn hàng                        | C       | AC1: trang chi tiết có giao diện in gọn (tên cửa hàng, mã đơn, sản phẩm, tổng tiền, địa chỉ).                                                                                                                           |
+
+### F08 - Đánh giá và yêu thích (Should)
+
+| ID    | User story                                       | Ưu tiên | Acceptance criteria                                                                                                                                                           |
+| ----- | ------------------------------------------------ | ------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| US-21 | Là khách hàng, tôi muốn đánh giá sản phẩm đã mua | S       | AC1: chỉ đánh giá khi có đơn COMPLETED chứa sản phẩm đó. AC2: 1–5 sao kèm bình luận ≤ 500 ký tự. AC3: mỗi người một đánh giá cho mỗi sản phẩm. AC4: hiển thị điểm trung bình. |
+| US-22 | Là khách hàng, tôi muốn lưu sản phẩm yêu thích   | S       | AC1: thêm/bỏ yêu thích bằng một cú nhấp. AC2: có trang danh sách yêu thích.                                                                                                   |
+| US-23 | Là quản trị viên, tôi muốn ẩn đánh giá vi phạm   | S       | AC1: ẩn đánh giá thì không hiện ở Client và không tính vào điểm trung bình.                                                                                                   |
+
+### F09 - Mã giảm giá (Should)
+
+| ID    | User story                                            | Ưu tiên | Acceptance criteria                                                                                                                                                                 |
+| ----- | ----------------------------------------------------- | ------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| US-24 | Là quản trị viên, tôi muốn tạo mã giảm giá            | S       | AC1: mã duy nhất, loại giảm theo % hoặc số tiền cố định, đơn tối thiểu, ngày bắt đầu/kết thúc, số lượt dùng tối đa. AC2: bật/tắt mã.                                                |
+| US-25 | Là khách hàng, tôi muốn áp mã giảm giá khi thanh toán | S       | AC1: mã hợp lệ thì hiển thị số tiền giảm ngay. AC2: mã hết hạn, hết lượt, chưa đủ đơn tối thiểu thì báo đúng lý do. AC3: tổng tiền sau giảm không âm. AC4: mỗi đơn chỉ dùng một mã. |
+
+### F10 - Dashboard và quản lý người dùng
+
+| ID    | User story                                                          | Ưu tiên | Acceptance criteria                                                                                                                                                             |
+| ----- | ------------------------------------------------------------------- | ------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| US-26 | Là quản trị viên, tôi muốn xem thống kê kinh doanh                  | M       | AC1: doanh thu theo ngày trong 30 ngày gần nhất (chỉ tính đơn COMPLETED). AC2: số đơn theo từng trạng thái. AC3: 5 sản phẩm bán chạy nhất. AC4: danh sách sản phẩm tồn kho ≤ 5. |
+| US-27 | Là quản trị viên, tôi muốn xem danh sách người dùng và khóa/mở khóa | M       | AC1: danh sách có tìm theo email, phân trang. AC2: khóa tài khoản thì thu hồi toàn bộ phiên đăng nhập. AC3: không được tự khóa chính mình.                                      |
+
+## 3. Quy tắc nghiệp vụ (Business rules)
+
+| ID    | Quy tắc                                                                                                                                                                                                                        |
+| ----- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
+| BR-01 | Mọi số tiền lưu bằng số nguyên đơn vị VND, không dùng số thực để tránh sai số làm tròn.                                                                                                                                        |
+| BR-02 | Giá bán hiện hành = giá khuyến mãi nếu có, ngược lại là giá gốc. Giá khuyến mãi luôn nhỏ hơn giá gốc.                                                                                                                          |
+| BR-03 | Tồn kho không bao giờ âm. Số lượng trong giỏ và trong đơn không vượt quá tồn kho tại thời điểm thao tác.                                                                                                                       |
+| BR-04 | Đơn hàng lưu bản sao (snapshot) tên, SKU, đơn giá sản phẩm và thông tin giao hàng tại thời điểm đặt; sửa sản phẩm hay địa chỉ sau đó không làm đổi đơn cũ.                                                                     |
+| BR-05 | Phí vận chuyển cố định 30.000 đ; miễn phí khi tổng tiền hàng ≥ 5.000.000 đ.                                                                                                                                                    |
+| BR-06 | Luồng trạng thái đơn: PENDING → CONFIRMED → SHIPPING → COMPLETED. Được hủy (CANCELLED) khi đang PENDING hoặc CONFIRMED. Không đi lùi, không đổi trạng thái đơn đã COMPLETED hoặc CANCELLED. Khách hàng chỉ tự hủy khi PENDING. |
+| BR-07 | Hủy đơn thì cộng trả tồn kho cho từng sản phẩm trong đơn.                                                                                                                                                                      |
+| BR-08 | Thanh toán COD: đơn mới có paymentStatus = UNPAID, tự chuyển PAID khi đơn COMPLETED.                                                                                                                                           |
+| BR-09 | Danh mục, thương hiệu, sản phẩm đã có dữ liệu liên quan chỉ được ẩn (`isActive = false`), không xóa cứng.                                                                                                                      |
+| BR-10 | Đăng ký công khai chỉ tạo vai trò CUSTOMER. Tài khoản ADMIN đầu tiên được tạo bằng seed.                                                                                                                                       |
+| BR-11 | Giỏ hàng yêu cầu đăng nhập; mỗi người dùng có đúng một giỏ.                                                                                                                                                                    |
+| BR-12 | Mã đơn có dạng `TSyymmdd-xxxx` (ngày tạo và 4 ký tự ngẫu nhiên), duy nhất.                                                                                                                                                     |
+| BR-13 | (F08) Chỉ người đã nhận hàng (đơn COMPLETED) mới được đánh giá sản phẩm.                                                                                                                                                       |
+| BR-14 | (F09) Mỗi đơn dùng tối đa một mã giảm giá; mã chỉ áp dụng được trong thời hạn, còn lượt và đạt đơn tối thiểu.                                                                                                                  |
+
+## 4. Yêu cầu phi chức năng (có ràng buộc định lượng)
+
+| ID     | Nhóm        | Yêu cầu                                                                                                                                                                                                         | Cách đo                                   |
+| ------ | ----------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ----------------------------------------- |
+| NFR-01 | Hiệu năng   | API danh sách và chi tiết sản phẩm có p95 ≤ 500 ms với 1.000 sản phẩm và 50 kết nối đồng thời                                                                                                                   | Công cụ autocannon hoặc k6                |
+| NFR-02 | Hiệu năng   | Lighthouse Performance ≥ 80 (mobile) cho trang chủ và trang chi tiết sản phẩm                                                                                                                                   | Lighthouse                                |
+| NFR-03 | Bảo mật     | Mật khẩu băm bcrypt (cost ≥ 10); access token sống ≤ 15 phút; 100% API ghi dữ liệu hoặc quản trị đều yêu cầu xác thực và phân quyền; `npm audit` không còn lỗ hổng mức high/critical; 0 secret trong repository | Test API, npm audit, gitleaks             |
+| NFR-04 | Toàn vẹn    | Khi 20 đơn đồng thời mua cùng sản phẩm còn 10 cái, đúng 10 đơn thành công và tồn kho cuối cùng bằng 0 (không âm)                                                                                                | Test tích hợp đồng thời                   |
+| NFR-05 | Khả dụng    | Sau khi khởi động, `/api/health` trả 200 trong ≤ 60 giây; staging đạt ≥ 95% thời gian hoạt động trong giai đoạn thực nghiệm (không tính khởi động nguội của gói miễn phí)                                       | Health check, giám sát                    |
+| NFR-06 | Sử dụng     | Giao diện responsive từ 360 px đến 1440 px không cuộn ngang; người dùng mới hoàn thành mua hàng trong ≤ 5 phút                                                                                                  | Kiểm tra thủ công, thực nghiệm người dùng |
+| NFR-07 | Chất lượng  | Độ phủ test dòng lệnh ≥ 70% cho module cốt lõi (xác thực, giỏ hàng, đơn hàng); 0 lỗi ESLint                                                                                                                     | Báo cáo coverage, ESLint                  |
+| NFR-08 | Tương thích | Hoạt động đúng trên 2 phiên bản mới nhất của Chrome, Edge, Firefox                                                                                                                                              | Kiểm tra thủ công                         |
+
+## 5. KPI nghiệp vụ cam kết (chốt trước 10/11/2026)
+
+| ID     | KPI                                                                 | Ngưỡng cam kết        | Nguồn minh chứng                |
+| ------ | ------------------------------------------------------------------- | --------------------- | ------------------------------- |
+| KPI-01 | Tỉ lệ chức năng Must (F01–F07, F10) hoạt động ổn định trên staging  | 100%                  | Biên bản demo/UAT               |
+| KPI-02 | Thời gian phản hồi p95 của API đọc sản phẩm                         | ≤ 500 ms              | Báo cáo đo tải (NFR-01)         |
+| KPI-03 | Độ phủ test module cốt lõi; tỉ lệ test pass ở lần chạy CI cuối      | ≥ 70%; 100%           | Báo cáo coverage, log CI        |
+| KPI-04 | Tỉ lệ hoàn thành tác vụ mua hàng; điểm SUS với ≥ 10 người dùng thật | ≥ 90%; ≥ 68           | Báo cáo thực nghiệm             |
+| KPI-05 | Số chặng pipeline CI/CD; tỉ lệ build xanh; số lần deploy tự động    | ≥ 6; ≥ 90%; ≥ 10      | Lịch sử GitHub Actions          |
+| KPI-06 | Điểm Lighthouse Performance (mobile) trang chủ và chi tiết sản phẩm | ≥ 80                  | Báo cáo Lighthouse              |
+| KPI-07 | Lỗi ESLint; secret bị lộ; issue Blocker/Critical từ phân tích tĩnh  | 0; 0; 0               | Báo cáo ESLint, gitleaks, Sonar |
+| KPI-08 | Số đơn thành công khi 20 đơn đồng thời mua sản phẩm tồn kho 10      | đúng 10, kho không âm | Test tích hợp (NFR-04)          |
+
+Ngưỡng có thể điều chỉnh cùng giảng viên hướng dẫn trước mốc 50% thời gian (rubric mục 5).
+
+## 6. Truy vết
+
+| Tính năng | User story    | Bảng dữ liệu chính (xem [SDD.md](SDD.md)) |
+| --------- | ------------- | ----------------------------------------- |
+| F01       | US-01 → US-05 | User, RefreshToken, Address               |
+| F02       | US-06, US-07  | Category, Brand                           |
+| F03       | US-08, US-09  | Product, ProductImage                     |
+| F04       | US-10 → US-13 | Product, Category, Brand                  |
+| F05       | US-14, US-15  | Cart, CartItem                            |
+| F06       | US-16         | Order, OrderItem, OrderStatusHistory      |
+| F07       | US-17 → US-20 | Order, OrderItem, OrderStatusHistory      |
+| F08       | US-21 → US-23 | Review, Wishlist (thêm khi làm F08)       |
+| F09       | US-24, US-25  | Coupon (thêm khi làm F09)                 |
+| F10       | US-26, US-27  | User, Order, OrderItem, Product           |

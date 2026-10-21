@@ -7,7 +7,7 @@ Mỗi file code có header `@feature [Fxx] ...` để truy vết file → tính 
 
 | Mã  | Tính năng                                                | Mức ưu tiên              | Trạng thái |
 | --- | -------------------------------------------------------- | ------------------------ | ---------- |
-| F00 | Nền tảng (setup, CI)                                     | Bắt buộc                 | Đang làm   |
+| F00 | Nền tảng (setup, CI)                                     | Bắt buộc                 | Xong       |
 | F01 | Xác thực và phân quyền                                   | Bắt buộc                 | Chưa làm   |
 | F02 | Danh mục và thương hiệu                                  | Bắt buộc                 | Chưa làm   |
 | F03 | Sản phẩm (CRUD, ảnh)                                     | Bắt buộc                 | Chưa làm   |

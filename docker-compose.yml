@@ -11,7 +11,7 @@ services:
       POSTGRES_PASSWORD: electronics_dev
       POSTGRES_DB: electronics_retail
     ports:
-      - '5432:5432'
+      - '54320:5432'
     volumes:
       - pgdata:/var/lib/postgresql/data
     healthcheck:
