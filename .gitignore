@@ -1,0 +1,25 @@
+# Thư viện & build
+node_modules/
+dist/
+build/
+coverage/
+
+# Biến môi trường (KHÔNG commit secret - chỉ commit file .env.example)
+.env
+.env.*
+!.env.example
+
+# Log & file tạm
+*.log
+logs/
+.DS_Store
+Thumbs.db
+
+# File upload khi chạy local
+backend/uploads/*
+!backend/uploads/.gitkeep
+
+# Claude Code (cấu hình cục bộ)
+.claude/
+
+*.docx

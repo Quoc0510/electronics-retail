@@ -1,0 +1,51 @@
+# @feature [F00] Nền tảng - CI cơ bản: lint -> test -> build.
+# Sẽ mở rộng ở Giai đoạn 4 (quét bảo mật, đóng gói Docker, deploy tự động) theo rubric TC2.6.
+name: CI
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+
+jobs:
+  lint:
+    name: Lint và kiểm tra format
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+      - run: npm ci
+      - run: npm run lint
+      - run: npm run format:check
+
+  test:
+    name: Test (backend, client, admin)
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+      - run: npm ci
+      # Prisma Client cần được sinh ra trước khi chạy test backend
+      - run: npx prisma generate --schema backend/prisma/schema.prisma
+        env:
+          DATABASE_URL: postgresql://test:test@localhost:5432/test
+      - run: npm test
+
+  build:
+    name: Build frontend
+    runs-on: ubuntu-latest
+    needs: [lint, test]
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+      - run: npm ci
+      - run: npm run build

@@ -1,0 +1,24 @@
+# @feature [F00] Nền tảng - Chạy PostgreSQL local bằng Docker.
+# Dùng: `npm run db:up` (khởi động) / `npm run db:down` (tắt, dữ liệu vẫn giữ trong volume).
+# Thông tin đăng nhập dưới đây CHỈ dành cho máy dev, không dùng cho production.
+services:
+  postgres:
+    image: postgres:16-alpine
+    container_name: electronics-postgres
+    restart: unless-stopped
+    environment:
+      POSTGRES_USER: electronics
+      POSTGRES_PASSWORD: electronics_dev
+      POSTGRES_DB: electronics_retail
+    ports:
+      - '5432:5432'
+    volumes:
+      - pgdata:/var/lib/postgresql/data
+    healthcheck:
+      test: ['CMD-SHELL', 'pg_isready -U electronics -d electronics_retail']
+      interval: 5s
+      timeout: 5s
+      retries: 10
+
+volumes:
+  pgdata:

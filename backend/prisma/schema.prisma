@@ -1,0 +1,11 @@
+// @feature [F00] Nền tảng - Cấu hình Prisma ORM kết nối PostgreSQL.
+// Các model (User, Product, Order...) sẽ được thêm ở Giai đoạn 1 (thiết kế CSDL) theo từng tính năng.
+
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}

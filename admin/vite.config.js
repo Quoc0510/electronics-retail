@@ -1,0 +1,18 @@
+import { defineConfig } from 'vitest/config';
+import react from '@vitejs/plugin-react';
+import tailwindcss from '@tailwindcss/vite';
+
+// @feature [F00] Nền tảng - Cấu hình Vite cho Frontend Admin (quản trị).
+export default defineConfig({
+  plugins: [react(), tailwindcss()],
+  server: {
+    port: 5174,
+    // Khi dev, mọi request /api được chuyển tiếp sang backend để tránh lỗi CORS
+    proxy: { '/api': 'http://localhost:4000' },
+  },
+  test: {
+    environment: 'jsdom',
+    setupFiles: ['./src/test/setup.js'],
+    coverage: { provider: 'v8', include: ['src/**/*.{js,jsx}'], reporter: ['text', 'lcov'] },
+  },
+});
