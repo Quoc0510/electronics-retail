@@ -53,7 +53,7 @@ flowchart TB
     P --> DB
 ```
 
-Cấu trúc thư mục backend khớp sơ đồ: `src/routes`, `src/controllers`, `src/services`, `src/middlewares`, `src/lib/prisma.js`, `src/config`, `src/utils`. Hiện có sẵn: middleware, route health, cấu hình và tiện ích; controllers/services được thêm theo từng tính năng.
+Cấu trúc thư mục backend khớp sơ đồ: `src/routes`, `src/controllers`, `src/services`, `src/middlewares`, `src/lib/prisma.js`, `src/config`, `src/utils`. Validate dùng Zod schema đặt ở `src/validators`. Hiện đã có: middleware, route health, cấu hình, tiện ích và toàn bộ lớp của F01; các tính năng sau thêm controller/service tương ứng.
 
 ## 4. Sơ đồ thực thể - quan hệ (ERD)
 
@@ -274,3 +274,83 @@ Môi trường local: `docker-compose.yml` chạy PostgreSQL; backend và hai fr
 | Ngày       | Thay đổi                                                                              | Lý do                                          |
 | ---------- | ------------------------------------------------------------------------------------- | ---------------------------------------------- |
 | 21/10/2026 | Chốt schema ban đầu F00–F07; không dùng biến thể sản phẩm; giỏ hàng yêu cầu đăng nhập | Phù hợp quy mô 6 tuần, giảm rủi ro trễ tiến độ |
+
+## 9. Danh sách API đã triển khai
+
+Định dạng lỗi chung: `{ "error": { "code", "message", "details?" } }`. Token gửi qua header `Authorization: Bearer <accessToken>`.
+
+### F01 - Xác thực và phân quyền
+
+| Method | Đường dẫn                   | Quyền     | Mô tả                                                             | User story |
+| ------ | --------------------------- | --------- | ----------------------------------------------------------------- | ---------- |
+| POST   | /api/auth/register          | Công khai | Đăng ký, tự đăng nhập, trả user và cặp token                      | US-01      |
+| POST   | /api/auth/login             | Công khai | Đăng nhập (giới hạn `LOGIN_RATE_LIMIT` lần/15 phút/IP)            | US-02      |
+| POST   | /api/auth/refresh           | Công khai | Đổi refresh token lấy cặp token mới (xoay vòng)                   | US-03      |
+| POST   | /api/auth/logout            | Công khai | Thu hồi refresh token                                             | US-03      |
+| GET    | /api/users/me               | Đăng nhập | Xem hồ sơ                                                         | US-04      |
+| PATCH  | /api/users/me               | Đăng nhập | Sửa họ tên, số điện thoại                                         | US-04      |
+| PUT    | /api/users/me/password      | Đăng nhập | Đổi mật khẩu, thu hồi mọi phiên                                   | US-04      |
+| GET    | /api/users/me/addresses     | Đăng nhập | Danh sách địa chỉ                                                 | US-04      |
+| POST   | /api/users/me/addresses     | Đăng nhập | Thêm địa chỉ                                                      | US-04      |
+| PATCH  | /api/users/me/addresses/:id | Đăng nhập | Sửa địa chỉ                                                       | US-04      |
+| DELETE | /api/users/me/addresses/:id | Đăng nhập | Xóa địa chỉ                                                       | US-04      |
+| GET    | /api/admin/me               | ADMIN     | Kiểm tra quyền quản trị; mọi route /api/admin/* đều yêu cầu ADMIN | US-05      |
+
+Mã lỗi thường gặp: `VALIDATION_ERROR` (400); `INVALID_CREDENTIALS`, `UNAUTHORIZED`, `INVALID_TOKEN`, `TOKEN_EXPIRED` (401); `ACCOUNT_LOCKED`, `FORBIDDEN` (403); `EMAIL_TAKEN` (409); `RATE_LIMITED` (429).
+
+### Quyết định bảo mật của F01
+
+- Access token JWT sống 15 phút; refresh token là chuỗi ngẫu nhiên 256 bit sống 7 ngày, DB chỉ lưu bản băm SHA-256.
+- Mỗi request đã xác thực đều đọc lại user từ DB, nên khóa tài khoản hoặc đổi vai trò có hiệu lực ngay.
+- Refresh token được xoay vòng; dùng lại token đã thu hồi sẽ thu hồi mọi phiên của người dùng đó (phòng token bị đánh cắp).
+- Đổi mật khẩu thu hồi mọi phiên. Đăng nhập dùng thông báo lỗi chung và băm giả khi email không tồn tại để không lộ email.
+- Frontend lưu token trong localStorage (đơn giản hơn cookie httpOnly khi Client/Admin khác domain với API). Đánh đổi: rủi ro XSS cao hơn, giảm thiểu bằng việc React tự escape nội dung và không dùng `dangerouslySetInnerHTML`.
+
+## 10. Giao diện F01 (frontend)
+
+### Cấu trúc
+
+```
+shared/src/      createApiClient (axios tự gắn và làm mới token), createAuth (AuthProvider, useAuth),
+                 tokenStorage, errors, validation, useFormState, ui/ (Button, FormField, Alert)
+client/src/      lib/api.js, context/AuthContext.jsx, components/ (Layout, ProtectedRoute, profile/*), pages/
+admin/src/       lib/api.js, context/AuthContext.jsx (chỉ cho ADMIN), components/ (AdminLayout, ProtectedRoute), pages/
+```
+
+Client và Admin dùng chung `shared` để không viết lặp logic đăng nhập; mỗi ứng dụng lưu token ở một key localStorage riêng (`techstore.client.auth`, `techstore.admin.auth`) nên không đè phiên của nhau.
+
+### Route
+
+| Ứng dụng | Đường dẫn             | Yêu cầu       | Trang                                    | User story   |
+| -------- | --------------------- | ------------- | ---------------------------------------- | ------------ |
+| Client   | `/dang-nhap`          | Công khai     | Đăng nhập                                | US-02        |
+| Client   | `/dang-ky`            | Công khai     | Đăng ký                                  | US-01        |
+| Client   | `/tai-khoan`          | Đã đăng nhập  | Hồ sơ, đổi mật khẩu, sổ địa chỉ (3 mục)  | US-04        |
+| Admin    | `/dang-nhap`          | Công khai     | Đăng nhập quản trị                       | US-02, US-05 |
+| Admin    | `/` và các trang khác | Vai trò ADMIN | Tổng quan (sẽ thay bằng dashboard ở F10) | US-05        |
+
+### Luồng làm mới phiên (US-03)
+
+```mermaid
+sequenceDiagram
+    participant UI as Trang (React)
+    participant AX as createApiClient
+    participant API as Backend
+
+    UI->>AX: api.get('/users/me')
+    AX->>API: GET /users/me (access token hết hạn)
+    API-->>AX: 401
+    AX->>API: POST /auth/refresh (refresh token)
+    API-->>AX: Cặp token mới
+    AX->>API: GET /users/me (token mới)
+    API-->>AX: 200
+    AX-->>UI: Dữ liệu (người dùng không nhận ra gián đoạn)
+    Note over AX,API: Nhiều request cùng 401 chỉ gọi refresh một lần.<br/>Refresh thất bại: xóa token, về trạng thái chưa đăng nhập.
+```
+
+### Quyết định thiết kế giao diện F01
+
+- Quy tắc kiểm tra form (mật khẩu, email, số điện thoại) đặt ở `shared/src/validation.js`, giống hệt backend để báo lỗi ngay; backend vẫn kiểm tra lại.
+- Nút gửi form bị khóa khi đang xử lý để người dùng không gửi hai lần.
+- Admin chỉ chấp nhận vai trò ADMIN ở tầng giao diện (`isAllowed`) và backend vẫn chặn `/api/admin/*` bằng quyền; giao diện chỉ là lớp thân thiện, không phải lớp bảo mật.
+- Khách hàng đăng nhập nhầm vào Admin sẽ bị thu hồi phiên ngay, không để token tồn tại.

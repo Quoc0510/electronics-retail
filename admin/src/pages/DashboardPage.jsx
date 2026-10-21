@@ -1,25 +1,27 @@
 /**
- * @feature [F00] Nền tảng - Trang tổng quan tạm thời của Admin, kiểm tra kết nối Backend.
- * Sẽ được thay bằng dashboard thống kê thật ở F10.
+ * @feature [F00][F01] Nền tảng, Phân quyền - Trang tổng quan tạm thời của Admin.
+ * Hiện chỉ chào người dùng và kiểm tra kết nối Backend; sẽ được thay bằng dashboard thống kê thật ở F10.
  */
 import { useQuery } from '@tanstack/react-query';
 import { api } from '../lib/api.js';
+import { useAuth } from '../context/AuthContext.jsx';
 
 export default function DashboardPage() {
+  const { user } = useAuth();
   const { data, isPending, isError } = useQuery({
     queryKey: ['health'],
     queryFn: () => api.get('/health').then((res) => res.data),
   });
 
   return (
-    <main className="mx-auto flex min-h-screen max-w-3xl flex-col items-center justify-center gap-4 p-6">
-      <h1 className="text-3xl font-bold text-slate-900">TechStore Admin</h1>
-      <p className="text-slate-600">Trang quản trị cửa hàng - đang xây dựng</p>
-      <p className="rounded-full bg-slate-100 px-4 py-1 text-sm" role="status">
+    <div className="space-y-2">
+      <h1 className="text-2xl font-bold text-slate-900">Tổng quan</h1>
+      <p className="text-slate-600">Xin chào {user.fullName}, trang quản trị đang được xây dựng.</p>
+      <p className="inline-block rounded-full bg-white px-4 py-1 text-sm shadow-sm" role="status">
         {isPending && 'Đang kết nối máy chủ...'}
         {isError && 'Không kết nối được máy chủ'}
         {data && `Máy chủ: ${data.status}`}
       </p>
-    </main>
+    </div>
   );
 }

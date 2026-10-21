@@ -24,6 +24,23 @@ jobs:
   test:
     name: Test (backend, client, admin)
     runs-on: ubuntu-latest
+    # Test tích hợp backend chạy trên PostgreSQL thật (schema "test"), nên pipeline cần một service database
+    services:
+      postgres:
+        image: postgres:16-alpine
+        env:
+          POSTGRES_USER: electronics
+          POSTGRES_PASSWORD: electronics_dev
+          POSTGRES_DB: electronics_retail
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd "pg_isready -U electronics -d electronics_retail"
+          --health-interval 5s
+          --health-timeout 5s
+          --health-retries 10
+    env:
+      TEST_DATABASE_URL: postgresql://electronics:electronics_dev@localhost:5432/electronics_retail?schema=test
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-node@v4

@@ -1,2 +1,4 @@
 /* @feature [F00] Nền tảng - Nạp Tailwind CSS (phiên bản 4) */
 @import 'tailwindcss';
+/* Quét thêm class Tailwind trong package dùng chung (nằm ngoài thư mục client) */
+@source '../../shared/src';

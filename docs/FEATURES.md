@@ -5,20 +5,20 @@ Mỗi file code có header `@feature [Fxx] ...` để truy vết file → tính 
 
 ## Danh mục tính năng
 
-| Mã  | Tính năng                                                | Mức ưu tiên              | Trạng thái |
-| --- | -------------------------------------------------------- | ------------------------ | ---------- |
-| F00 | Nền tảng (setup, CI)                                     | Bắt buộc                 | Xong       |
-| F01 | Xác thực và phân quyền                                   | Bắt buộc                 | Chưa làm   |
-| F02 | Danh mục và thương hiệu                                  | Bắt buộc                 | Chưa làm   |
-| F03 | Sản phẩm (CRUD, ảnh)                                     | Bắt buộc                 | Chưa làm   |
-| F04 | Duyệt và tìm sản phẩm                                    | Bắt buộc                 | Chưa làm   |
-| F05 | Giỏ hàng                                                 | Bắt buộc                 | Chưa làm   |
-| F06 | Đặt hàng (COD)                                           | Bắt buộc                 | Chưa làm   |
-| F07 | Quản lý đơn hàng                                         | Bắt buộc                 | Chưa làm   |
-| F08 | Đánh giá và yêu thích                                    | Nên làm (cắt nếu trễ)    | Chưa làm   |
-| F09 | Khuyến mãi / mã giảm giá                                 | Nên làm (cắt nếu trễ)    | Chưa làm   |
-| F10 | Dashboard và báo cáo                                     | Bắt buộc                 | Chưa làm   |
-| F11 | Mở rộng (VNPay/ZaloPay sandbox, so sánh sản phẩm, email) | Chỉ làm nếu dư thời gian | Chưa làm   |
+| Mã  | Tính năng                                                | Mức ưu tiên              | Trạng thái       |
+| --- | -------------------------------------------------------- | ------------------------ | ---------------- |
+| F00 | Nền tảng (setup, CI)                                     | Bắt buộc                 | Xong             |
+| F01 | Xác thực và phân quyền                                   | Bắt buộc                 | Xong (chờ merge) |
+| F02 | Danh mục và thương hiệu                                  | Bắt buộc                 | Chưa làm         |
+| F03 | Sản phẩm (CRUD, ảnh)                                     | Bắt buộc                 | Chưa làm         |
+| F04 | Duyệt và tìm sản phẩm                                    | Bắt buộc                 | Chưa làm         |
+| F05 | Giỏ hàng                                                 | Bắt buộc                 | Chưa làm         |
+| F06 | Đặt hàng (COD)                                           | Bắt buộc                 | Chưa làm         |
+| F07 | Quản lý đơn hàng                                         | Bắt buộc                 | Chưa làm         |
+| F08 | Đánh giá và yêu thích                                    | Nên làm (cắt nếu trễ)    | Chưa làm         |
+| F09 | Khuyến mãi / mã giảm giá                                 | Nên làm (cắt nếu trễ)    | Chưa làm         |
+| F10 | Dashboard và báo cáo                                     | Bắt buộc                 | Chưa làm         |
+| F11 | Mở rộng (VNPay/ZaloPay sandbox, so sánh sản phẩm, email) | Chỉ làm nếu dư thời gian | Chưa làm         |
 
 ## Lịch dự kiến (21/10 → 30/11/2026)
 

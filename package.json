@@ -7,7 +7,8 @@
   "workspaces": [
     "backend",
     "client",
-    "admin"
+    "admin",
+    "shared"
   ],
   "scripts": {
     "dev:backend": "npm run dev -w backend",
@@ -18,7 +19,7 @@
     "lint:fix": "eslint . --fix",
     "format": "prettier --write .",
     "format:check": "prettier --check .",
-    "test": "npm run test -w backend && npm run test -w client && npm run test -w admin",
+    "test": "npm run test -w shared && npm run test -w backend && npm run test -w client && npm run test -w admin",
     "db:up": "docker compose up -d",
     "db:down": "docker compose down"
   },

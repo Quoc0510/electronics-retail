@@ -26,9 +26,9 @@ export default [
     },
   },
 
-  // Frontend (client + admin): chạy trên trình duyệt, dùng React
+  // Frontend (client + admin + shared): chạy trên trình duyệt, dùng React
   {
-    files: ['client/**/*.{js,jsx}', 'admin/**/*.{js,jsx}'],
+    files: ['client/**/*.{js,jsx}', 'admin/**/*.{js,jsx}', 'shared/**/*.{js,jsx}'],
     plugins: { react, 'react-hooks': reactHooks },
     languageOptions: {
       ecmaVersion: 'latest',
