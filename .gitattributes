@@ -1,0 +1,8 @@
+# Luôn dùng LF khi checkout, kể cả trên Windows, để khớp với .editorconfig và Prettier (endOfLine: lf).
+# Nếu không, Git trên Windows (autocrlf=true) đổi file sang CRLF và `npm run format:check` báo lỗi hàng loạt.
+* text=auto eol=lf
+
+# Tệp nhị phân: không chuyển đổi
+*.docx binary
+*.png binary
+*.jpg binary
