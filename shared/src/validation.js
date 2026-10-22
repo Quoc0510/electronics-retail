@@ -17,3 +17,13 @@ export const validatePassword = (value) => {
   if (!/\d/.test(value)) return 'Mật khẩu phải có ít nhất một chữ số';
   return '';
 };
+
+// F02: đường dẫn ảnh/logo chỉ nhận http hoặc https (giống backend, từ chối javascript:, data:...)
+export const isValidHttpUrl = (value) => {
+  try {
+    const { protocol } = new URL(value.trim());
+    return protocol === 'http:' || protocol === 'https:';
+  } catch {
+    return false;
+  }
+};

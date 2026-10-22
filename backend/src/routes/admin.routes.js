@@ -5,6 +5,7 @@
  */
 import { Router } from 'express';
 import { authenticate, requireRole } from '../middlewares/auth.js';
+import { adminCatalogRouter } from './catalog.routes.js'; // [F02]
 
 const router = Router();
 
@@ -14,5 +15,8 @@ router.use(authenticate, requireRole('ADMIN'));
 router.get('/me', (req, res) => {
   res.json({ id: req.user.id, email: req.user.email, role: req.user.role });
 });
+
+// [F02] Quản lý danh mục và thương hiệu: /api/admin/categories, /api/admin/brands
+router.use(adminCatalogRouter);
 
 export default router;

@@ -1,10 +1,16 @@
 /**
- * @feature [F01] Phân quyền (frontend) - Khung chung của các trang Admin: thanh trên cùng có tên người dùng và nút Đăng xuất.
- * Các tính năng sau (F02 danh mục, F03 sản phẩm...) sẽ thêm menu điều hướng vào đây.
+ * @feature [F01][F02] Khung chung của các trang Admin: thanh trên cùng có tên người dùng, nút Đăng xuất và menu.
+ * Các tính năng sau (F03 sản phẩm, F07 đơn hàng...) sẽ thêm mục vào MENU_ITEMS.
  */
-import { Outlet } from 'react-router-dom';
+import { NavLink, Outlet } from 'react-router-dom';
 import { Button } from '@techstore/shared';
 import { useAuth } from '../context/AuthContext.jsx';
+
+const MENU_ITEMS = [
+  { to: '/', label: 'Tổng quan', end: true },
+  { to: '/danh-muc', label: 'Danh mục' }, // [F02]
+  { to: '/thuong-hieu', label: 'Thương hiệu' }, // [F02]
+];
 
 export default function AdminLayout() {
   const { user, logout } = useAuth();
@@ -21,6 +27,24 @@ export default function AdminLayout() {
             </Button>
           </div>
         </div>
+        <nav aria-label="Menu quản trị" className="mx-auto flex max-w-6xl flex-wrap gap-1 px-4">
+          {MENU_ITEMS.map(({ to, label, end }) => (
+            <NavLink
+              key={to}
+              to={to}
+              end={end}
+              className={({ isActive }) =>
+                `-mb-px border-b-2 px-4 py-2 text-sm font-medium ${
+                  isActive
+                    ? 'border-blue-600 text-blue-600'
+                    : 'border-transparent text-slate-600 hover:text-slate-900'
+                }`
+              }
+            >
+              {label}
+            </NavLink>
+          ))}
+        </nav>
       </header>
       <main className="mx-auto w-full max-w-6xl flex-1 px-4 py-8">
         <Outlet />

@@ -28,3 +28,18 @@ export const loginAs = async (request, app, email, password = 'Matkhau123') => {
   const res = await request(app).post('/api/auth/login').send({ email, password });
   return res.body;
 };
+
+/** Tạo nhanh một sản phẩm gắn với danh mục và thương hiệu (dùng để thử quy tắc "đã có sản phẩm thì không xóa"). */
+export const createProduct = ({ categoryId, brandId, sku = 'SKU-1', isActive = true }) =>
+  prisma.product.create({
+    data: {
+      sku,
+      name: `Sản phẩm ${sku}`,
+      slug: `san-pham-${sku.toLowerCase()}`,
+      price: 1000000,
+      stock: 5,
+      isActive,
+      categoryId,
+      brandId,
+    },
+  });

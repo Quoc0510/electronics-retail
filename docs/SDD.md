@@ -298,6 +298,28 @@ Môi trường local: `docker-compose.yml` chạy PostgreSQL; backend và hai fr
 
 Mã lỗi thường gặp: `VALIDATION_ERROR` (400); `INVALID_CREDENTIALS`, `UNAUTHORIZED`, `INVALID_TOKEN`, `TOKEN_EXPIRED` (401); `ACCOUNT_LOCKED`, `FORBIDDEN` (403); `EMAIL_TAKEN` (409); `RATE_LIMITED` (429).
 
+### F02 - Danh mục và thương hiệu
+
+Danh mục (`categories`) và thương hiệu (`brands`) có cùng API, thay `{loại}` bằng `categories` hoặc `brands`.
+
+| Method | Đường dẫn             | Quyền     | Mô tả                                                                        | User story   |
+| ------ | --------------------- | --------- | ---------------------------------------------------------------------------- | ------------ |
+| GET    | /api/{loại}           | Công khai | Chỉ các mục đang hiện, kèm số sản phẩm đang bán (không lộ trường nội bộ)     | US-06 AC3    |
+| GET    | /api/admin/{loại}     | ADMIN     | Tất cả (kể cả đang ẩn) kèm tổng số sản phẩm; tham số `?search=` tìm theo tên | US-06, US-07 |
+| POST   | /api/admin/{loại}     | ADMIN     | Tạo mới: tên duy nhất (không phân biệt hoa thường), slug tự sinh             | US-06, US-07 |
+| GET    | /api/admin/{loại}/:id | ADMIN     | Xem chi tiết                                                                 | US-06, US-07 |
+| PATCH  | /api/admin/{loại}/:id | ADMIN     | Sửa từng phần, đổi tên thì sinh lại slug; `isActive` để ẩn/hiện              | US-06, US-07 |
+| DELETE | /api/admin/{loại}/:id | ADMIN     | Xóa; trả 409 `HAS_PRODUCTS` nếu đã có sản phẩm (chỉ được ẩn, BR-09)          | US-06 AC2    |
+
+Mã lỗi thêm: `NAME_TAKEN` (409), `HAS_PRODUCTS` (409), `INVALID_NAME` (400, tên không tạo được slug).
+
+Quyết định thiết kế F02:
+
+- Hai loại dùng chung một "nhà máy" `createTaxonomyService` (`backend/src/services/taxonomy.service.js`) cùng controller và route tương ứng, tránh viết lặp. Giao diện Admin cũng dùng chung component `TaxonomyPage`.
+- Tên duy nhất được kiểm tra ở ứng dụng (không phân biệt hoa thường) và slug duy nhất do ràng buộc `UNIQUE` của DB; lỗi tạo trùng cùng lúc cũng được bắt (mã `P2002`).
+- Ảnh danh mục và logo thương hiệu nhập bằng đường dẫn http/https (chưa tải ảnh lên máy chủ); việc tải ảnh được làm ở F03 cho ảnh sản phẩm.
+- Website khách hàng chỉ nhận dữ liệu tối thiểu: không có `isActive`, `createdAt`, `updatedAt`.
+
 ### Quyết định bảo mật của F01
 
 - Access token JWT sống 15 phút; refresh token là chuỗi ngẫu nhiên 256 bit sống 7 ngày, DB chỉ lưu bản băm SHA-256.
