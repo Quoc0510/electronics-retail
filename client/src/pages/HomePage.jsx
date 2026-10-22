@@ -12,7 +12,7 @@ export default function HomePage() {
   });
 
   return (
-    <main className="mx-auto flex min-h-screen max-w-3xl flex-col items-center justify-center gap-4 p-6">
+    <div className="flex flex-col items-center justify-center gap-4 py-16">
       <h1 className="text-3xl font-bold text-slate-900">TechStore</h1>
       <p className="text-slate-600">Website bán thiết bị điện tử - đang xây dựng</p>
       <p className="rounded-full bg-slate-100 px-4 py-1 text-sm" role="status">
@@ -20,6 +20,6 @@ export default function HomePage() {
         {isError && 'Không kết nối được máy chủ'}
         {data && `Máy chủ: ${data.status}`}
       </p>
-    </main>
+    </div>
   );
 }
