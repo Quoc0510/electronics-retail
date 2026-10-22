@@ -7,6 +7,7 @@ import {
   getErrorMessage,
   getFieldErrors,
   isValidEmail,
+  isValidHttpUrl,
   isValidPhone,
   validatePassword,
 } from '../src/index.js';
@@ -119,5 +120,15 @@ describe('quy tắc kiểm tra form', () => {
     const result = validatePassword(value);
     if (expected === '') expect(result).toBe('');
     else expect(result).toMatch(expected);
+  });
+
+  it.each([
+    ['https://example.com/a.png', true],
+    ['http://example.com', true],
+    ['javascript:alert(1)', false],
+    ['data:text/html,x', false],
+    ['khong-phai-url', false],
+  ])('isValidHttpUrl(%j) = %s', (value, expected) => {
+    expect(isValidHttpUrl(value)).toBe(expected);
   });
 });

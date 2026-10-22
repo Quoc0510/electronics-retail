@@ -8,8 +8,8 @@ Mỗi file code có header `@feature [Fxx] ...` để truy vết file → tính 
 | Mã  | Tính năng                                                | Mức ưu tiên              | Trạng thái       |
 | --- | -------------------------------------------------------- | ------------------------ | ---------------- |
 | F00 | Nền tảng (setup, CI)                                     | Bắt buộc                 | Xong             |
-| F01 | Xác thực và phân quyền                                   | Bắt buộc                 | Xong (chờ merge) |
-| F02 | Danh mục và thương hiệu                                  | Bắt buộc                 | Chưa làm         |
+| F01 | Xác thực và phân quyền                                   | Bắt buộc                 | Xong             |
+| F02 | Danh mục và thương hiệu                                  | Bắt buộc                 | Xong (chờ merge) |
 | F03 | Sản phẩm (CRUD, ảnh)                                     | Bắt buộc                 | Chưa làm         |
 | F04 | Duyệt và tìm sản phẩm                                    | Bắt buộc                 | Chưa làm         |
 | F05 | Giỏ hàng                                                 | Bắt buộc                 | Chưa làm         |

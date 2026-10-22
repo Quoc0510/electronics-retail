@@ -6,7 +6,7 @@ export { createTokenStorage } from './tokenStorage.js';
 export { createApiClient } from './createApiClient.js';
 export { UserFacingError, getErrorMessage, getFieldErrors } from './errors.js';
 export { createAuth } from './createAuth.jsx';
-export { isValidEmail, isValidPhone, validatePassword } from './validation.js';
+export { isValidEmail, isValidHttpUrl, isValidPhone, validatePassword } from './validation.js';
 export { useFormState } from './useFormState.js';
 export { default as Alert } from './ui/Alert.jsx';
 export { default as Button } from './ui/Button.jsx';

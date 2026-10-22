@@ -21,6 +21,12 @@ describe('FormField', () => {
     expect(input).toHaveAccessibleDescription('Email không đúng định dạng');
   });
 
+  it('multiline hiển thị ô nhập nhiều dòng', () => {
+    render(<FormField label="Mô tả" multiline />);
+
+    expect(screen.getByLabelText('Mô tả').tagName).toBe('TEXTAREA');
+  });
+
   it('không hiện lỗi khi hợp lệ', () => {
     render(<FormField label="Email" />);
 

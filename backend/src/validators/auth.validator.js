@@ -68,7 +68,3 @@ export const addressSchema = z.object({
 export const updateAddressSchema = addressSchema
   .partial()
   .refine((data) => Object.keys(data).length > 0, { message: 'Không có dữ liệu để cập nhật' });
-
-export const idParamSchema = z.object({
-  id: z.coerce.number().int().positive(),
-});

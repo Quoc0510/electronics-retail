@@ -8,10 +8,10 @@ import * as userController from '../controllers/user.controller.js';
 import {
   addressSchema,
   changePasswordSchema,
-  idParamSchema,
   updateAddressSchema,
   updateProfileSchema,
 } from '../validators/auth.validator.js';
+import { idParamSchema } from '../validators/common.validator.js';
 
 const router = Router();
 
