@@ -10,6 +10,7 @@ const MENU_ITEMS = [
   { to: '/', label: 'Tổng quan', end: true },
   { to: '/danh-muc', label: 'Danh mục' }, // [F02]
   { to: '/thuong-hieu', label: 'Thương hiệu' }, // [F02]
+  { to: '/san-pham', label: 'Sản phẩm' }, // [F03]
 ];
 
 export default function AdminLayout() {

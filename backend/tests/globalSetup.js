@@ -3,6 +3,7 @@
  * Áp dụng migration vào schema "test" (Prisma tự tạo schema nếu chưa có), nên luôn đồng bộ với schema thật.
  */
 import { execSync } from 'node:child_process';
+import fs from 'node:fs';
 
 export default function setup() {
   try {
@@ -16,4 +17,7 @@ export default function setup() {
         String(error.stderr ?? error.message),
     );
   }
+
+  // [F03] Trả về hàm dọn dẹp, vitest gọi sau khi chạy xong toàn bộ test: xóa thư mục ảnh tạm
+  return () => fs.rmSync(process.env.UPLOAD_DIR, { recursive: true, force: true });
 }

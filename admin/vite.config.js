@@ -7,8 +7,8 @@ export default defineConfig({
   plugins: [react(), tailwindcss()],
   server: {
     port: 5174,
-    // Khi dev, mọi request /api được chuyển tiếp sang backend để tránh lỗi CORS
-    proxy: { '/api': 'http://localhost:4000' },
+    // Khi dev, request /api (dữ liệu) và /uploads (ảnh sản phẩm) được chuyển tiếp sang backend để tránh lỗi CORS
+    proxy: { '/api': 'http://localhost:4000', '/uploads': 'http://localhost:4000' },
   },
   test: {
     environment: 'jsdom',

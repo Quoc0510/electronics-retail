@@ -9,7 +9,7 @@
 | `admin/`   | Trang quản trị                                                                 | React, Vite, Tailwind CSS            | 5174 |
 | `shared/`  | Code dùng chung của client và admin (gọi API, đăng nhập, Button, FormField...) | React, Axios                         | -    |
 
-Tài liệu: [Danh sách tính năng và lịch](docs/FEATURES.md) · [SRS](docs/SRS.md) · [SDD](docs/SDD.md) · [Từ điển dữ liệu](docs/DATA_DICTIONARY.md) · [Bản cam kết (nháp)](docs/COMMITMENT.md) · [Quy ước code](docs/CODING_CONVENTION.md) · [Nhật ký AI](docs/AI_USAGE_LOG.md)
+Tài liệu: [Danh sách tính năng và lịch](docs/FEATURES.md) · [SRS](docs/SRS.md) · [SDD](docs/SDD.md) · [Từ điển dữ liệu](docs/DATA_DICTIONARY.md) · [Bản cam kết (nháp)](docs/COMMITMENT.md) · [Quy ước code](docs/CODING_CONVENTION.md) · [Nhật ký AI](docs/AI_USAGE_LOG.md) · [Nợ kỹ thuật](docs/TECH_DEBT.md)
 
 ## Yêu cầu
 

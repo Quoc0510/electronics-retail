@@ -320,6 +320,36 @@ Quyết định thiết kế F02:
 - Ảnh danh mục và logo thương hiệu nhập bằng đường dẫn http/https (chưa tải ảnh lên máy chủ); việc tải ảnh được làm ở F03 cho ảnh sản phẩm.
 - Website khách hàng chỉ nhận dữ liệu tối thiểu: không có `isActive`, `createdAt`, `updatedAt`.
 
+### F03 - Sản phẩm
+
+Tất cả đường dẫn dưới `/api/admin/products` đều yêu cầu vai trò ADMIN.
+
+| Method | Đường dẫn                               | Mô tả                                                                                                                                          | User story   |
+| ------ | --------------------------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------- | ------------ |
+| GET    | /api/admin/products                     | Danh sách phân trang `{ items, page, pageSize, total }`; tham số `search`, `categoryId`, `brandId`, `isActive`, `page`, `pageSize` (tối đa 50) | US-09 AC3    |
+| POST   | /api/admin/products                     | Tạo sản phẩm; SKU chuyển thành chữ hoa và duy nhất, slug tự sinh                                                                               | US-08        |
+| GET    | /api/admin/products/:id                 | Chi tiết kèm thông số, danh mục, thương hiệu và danh sách ảnh theo thứ tự                                                                      | US-08        |
+| PATCH  | /api/admin/products/:id                 | Sửa từng phần; `isActive` để ẩn/hiện; `salePrice: null` để bỏ khuyến mãi                                                                       | US-08, US-09 |
+| DELETE | /api/admin/products/:id                 | Xóa; trả 409 `HAS_ORDERS` nếu đã nằm trong đơn hàng (chỉ được ẩn, BR-09); tự gỡ khỏi giỏ hàng và xóa file ảnh                                  | US-09 AC2    |
+| POST   | /api/admin/products/:id/images          | Tải ảnh lên (`multipart/form-data`, trường `images`, tối đa 6 file mỗi lần)                                                                    | US-08 AC6    |
+| PUT    | /api/admin/products/:id/images/order    | Đặt thứ tự ảnh `{ imageIds: [...] }`; ảnh đầu tiên là ảnh đại diện                                                                             | US-08 AC6    |
+| DELETE | /api/admin/products/:id/images/:imageId | Xóa ảnh (dòng trong DB và file trên đĩa)                                                                                                       | US-08 AC6    |
+
+Ảnh đã tải lên được phục vụ công khai tại `GET /uploads/products/<uuid>.<jpg|png|webp>`.
+
+Mã lỗi thêm: `SKU_TAKEN`, `SLUG_TAKEN`, `HAS_ORDERS` (409); `INVALID_CATEGORY`, `INVALID_BRAND`, `INVALID_SALE_PRICE`, `INVALID_IMAGE_TYPE`, `TOO_MANY_IMAGES`, `INVALID_IMAGE_ORDER`, `NO_FILE` (400); `IMAGE_TOO_LARGE` (413).
+
+Quyết định thiết kế F03:
+
+- **Kiểm tra loại ảnh bằng nội dung thật của file** (chữ ký đầu file: JPEG `FF D8 FF`, PNG `89 50 4E 47...`, WebP `RIFF....WEBP`), không tin tên file hay Content-Type do trình duyệt gửi, vì người dùng có thể đổi tên một file bất kỳ thành `.jpg` (US-08 AC6). File không hợp lệ không bao giờ được ghi ra đĩa.
+- **Tên file do hệ thống sinh (UUID)**, không dùng tên người dùng gửi, nên không thể ghi đè file khác hay chèn `../` để ghi ra ngoài thư mục `uploads`. Hàm xóa file cũng kiểm tra đường dẫn nằm trong thư mục upload.
+- **Thêm ảnh theo kiểu "cả lượt hoặc không gì cả"**: mọi file được kiểm tra loại và tổng số ảnh (tối đa 6) trước khi ghi; nếu bước ghi DB lỗi thì các file vừa ghi bị xóa để không để lại file mồ côi.
+- Giới hạn 2MB mỗi ảnh được multer chặn khi đọc; file giữ trong bộ nhớ (tối đa 6 x 2MB) rồi mới ghi ra đĩa sau khi đã kiểm tra.
+- Các quy tắc giá (BR-01, BR-02), tồn kho (BR-03) được kiểm tra ở ba lớp: Zod (dữ liệu gửi lên), service (so khớp với giá trị đang có khi chỉ sửa một trong hai giá) và ràng buộc CHECK của PostgreSQL.
+- SKU luôn chuyển thành chữ hoa để duy nhất không phân biệt hoa thường; slug trùng (hai sản phẩm cùng tên) thì thêm SKU phía sau.
+- Nơi lưu ảnh tách riêng ở `backend/src/lib/storage.js` để sau này đổi sang dịch vụ đám mây (xem [TECH_DEBT.md](TECH_DEBT.md), mục 2).
+- API công khai cho khách xem sản phẩm (chỉ sản phẩm đang bán) làm ở F04.
+
 ### Quyết định bảo mật của F01
 
 - Access token JWT sống 15 phút; refresh token là chuỗi ngẫu nhiên 256 bit sống 7 ngày, DB chỉ lưu bản băm SHA-256.

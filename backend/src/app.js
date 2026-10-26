@@ -22,6 +22,17 @@ app.use(cors({ origin: env.corsOrigins, credentials: true }));
 
 app.use(express.json({ limit: '1mb' }));
 
+// [F03] Phục vụ ảnh đã tải lên. Client/Admin chạy ở origin khác nên phải cho phép tải ảnh chéo origin
+// (helmet mặc định chặn bằng Cross-Origin-Resource-Policy: same-origin)
+app.use(
+  '/uploads',
+  (_req, res, next) => {
+    res.setHeader('Cross-Origin-Resource-Policy', 'cross-origin');
+    next();
+  },
+  express.static(env.uploadDir, { index: false, maxAge: '7d', immutable: true }),
+);
+
 // Ghi log mỗi request qua winston
 app.use(morgan('tiny', { stream: { write: (line) => logger.info(line.trim()) } }));
 

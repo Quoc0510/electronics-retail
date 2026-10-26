@@ -24,6 +24,12 @@ export function useFormState(initialValues) {
     },
   });
 
+  // Đặt giá trị cho ô không phải <input> thông thường (ví dụ bảng thông số), đồng thời xóa lỗi của ô đó
+  const setFieldValue = (name, value) => {
+    setValues((current) => ({ ...current, [name]: value }));
+    setErrors((current) => ({ ...current, [name]: undefined }));
+  };
+
   /**
    * Tạo hàm xử lý onSubmit.
    * @param {(values: object) => Record<string, string>} validate Trả về object lỗi theo ô (rỗng nếu hợp lệ)
@@ -51,5 +57,15 @@ export function useFormState(initialValues) {
     }
   };
 
-  return { values, setValues, errors, serverError, setServerError, submitting, bind, handleSubmit };
+  return {
+    values,
+    setValues,
+    setFieldValue,
+    errors,
+    serverError,
+    setServerError,
+    submitting,
+    bind,
+    handleSubmit,
+  };
 }
