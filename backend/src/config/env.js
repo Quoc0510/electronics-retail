@@ -4,6 +4,8 @@
  * Nếu thiếu hoặc sai biến bắt buộc, server báo lỗi rõ ràng và dừng ngay khi khởi động.
  */
 import 'dotenv/config';
+import path from 'node:path';
+import { fileURLToPath } from 'node:url';
 import { z, flattenError } from 'zod';
 
 const envSchema = z.object({
@@ -15,7 +17,12 @@ const envSchema = z.object({
   JWT_ACCESS_SECRET: z.string().min(32, 'JWT_ACCESS_SECRET phải dài ít nhất 32 ký tự'),
   // [F01] Giới hạn số lần gọi API đăng nhập / 15 phút / IP
   LOGIN_RATE_LIMIT: z.coerce.number().int().positive().default(10),
+  // [F03] Thư mục lưu ảnh tải lên (mặc định backend/uploads). Có thể đặt đường dẫn tuyệt đối
+  UPLOAD_DIR: z.string().optional(),
 });
+
+// Thư mục gốc của backend, tính từ vị trí file này để không phụ thuộc vào nơi chạy lệnh
+const backendRoot = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '../..');
 
 const parsed = envSchema.safeParse(process.env);
 
@@ -39,6 +46,7 @@ if (
 export const env = {
   ...parsed.data,
   isProduction: parsed.data.NODE_ENV === 'production',
+  uploadDir: path.resolve(backendRoot, parsed.data.UPLOAD_DIR ?? 'uploads'),
   // Chuyển chuỗi "a,b" thành mảng ["a", "b"]
   corsOrigins: parsed.data.CORS_ORIGINS.split(',').map((origin) => origin.trim()),
 };

@@ -1,3 +1,5 @@
+import os from 'node:os';
+import path from 'node:path';
 import { defineConfig } from 'vitest/config';
 
 // @feature [F00] Nền tảng - Cấu hình kiểm thử backend (unit + API integration bằng Supertest).
@@ -7,6 +9,10 @@ import { defineConfig } from 'vitest/config';
 const TEST_DATABASE_URL =
   process.env.TEST_DATABASE_URL ??
   'postgresql://electronics:electronics_dev@localhost:54320/electronics_retail?schema=test';
+
+// [F03] Ảnh tải lên trong test được ghi vào thư mục tạm, KHÔNG ghi vào backend/uploads của máy dev
+const TEST_UPLOAD_DIR = path.join(os.tmpdir(), 'techstore-test-uploads');
+process.env.UPLOAD_DIR = TEST_UPLOAD_DIR;
 
 // globalSetup chạy ở tiến trình chính nên cần đặt biến môi trường ở đây
 process.env.DATABASE_URL = TEST_DATABASE_URL;
@@ -24,6 +30,7 @@ export default defineConfig({
       DATABASE_URL: TEST_DATABASE_URL,
       JWT_ACCESS_SECRET: 'khoa-bi-mat-chi-dung-cho-test-khong-dung-o-dau-khac-0123456789',
       LOGIN_RATE_LIMIT: '1000',
+      UPLOAD_DIR: TEST_UPLOAD_DIR,
     },
     coverage: {
       provider: 'v8',

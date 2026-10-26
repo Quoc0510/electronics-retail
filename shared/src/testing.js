@@ -14,6 +14,19 @@ const respond = (config, status, data) => {
   );
 };
 
+// Body JSON được axios chuyển thành chuỗi; body tải file là FormData nên gom lại thành { tên trường: [tên file...] }
+const parseBody = (data) => {
+  if (!data) return undefined;
+  if (data instanceof FormData) {
+    const grouped = {};
+    for (const [key, value] of data.entries()) {
+      (grouped[key] ??= []).push(value instanceof File ? value.name : value);
+    }
+    return grouped;
+  }
+  return JSON.parse(data);
+};
+
 /** Tạo nội dung lỗi giống backend: { error: { code, message, details } } */
 export const apiError = (code, message, details) => ({ error: { code, message, details } });
 
@@ -26,7 +39,7 @@ export const mockServer = (api, handlers) => {
   const calls = [];
   api.defaults.adapter = (config) => {
     const key = `${config.method.toUpperCase()} ${config.url}`;
-    const body = config.data ? JSON.parse(config.data) : undefined;
+    const body = parseBody(config.data);
     calls.push({ key, body });
 
     const handler = handlers[key];
