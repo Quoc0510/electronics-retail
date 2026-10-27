@@ -88,7 +88,10 @@ export default function ProductImages({ productId, images }) {
   const actionError = upload.error ?? reorder.error ?? remove.error;
 
   return (
-    <section aria-labelledby="images-heading" className="space-y-4 rounded-lg bg-white p-4 shadow">
+    <section
+      aria-labelledby="images-heading"
+      className="space-y-4 rounded-2xl border border-slate-200 bg-white p-6 shadow-card"
+    >
       <div>
         <h2 id="images-heading" className="text-lg font-semibold text-slate-900">
           Ảnh sản phẩm ({images.length}/{MAX_IMAGES})
@@ -101,20 +104,23 @@ export default function ProductImages({ productId, images }) {
       {actionError && <Alert>{getErrorMessage(actionError)}</Alert>}
 
       {images.length === 0 ? (
-        <p className="rounded-md border border-dashed border-slate-300 p-6 text-center text-slate-500">
+        <p className="rounded-2xl border border-dashed border-slate-300 p-8 text-center text-slate-500">
           Chưa có ảnh nào.
         </p>
       ) : (
         <ul className="grid grid-cols-2 gap-3 sm:grid-cols-3 md:grid-cols-6">
           {images.map((image, index) => (
-            <li key={image.id} className="space-y-2 rounded-md border border-slate-200 p-2">
+            <li
+              key={image.id}
+              className="space-y-2 rounded-xl border border-slate-200 p-2 transition hover:border-brand-200"
+            >
               <img
                 src={assetUrl(image.url)}
                 alt={`Ảnh sản phẩm ${index + 1}`}
-                className="aspect-square w-full rounded object-cover"
+                className="aspect-square w-full rounded-lg object-cover"
               />
               {index === 0 && (
-                <span className="inline-block rounded bg-blue-100 px-2 py-0.5 text-xs font-medium text-blue-700">
+                <span className="inline-block rounded-full bg-brand-600 px-2.5 py-0.5 text-xs font-semibold text-white">
                   Ảnh đại diện
                 </span>
               )}
@@ -155,10 +161,10 @@ export default function ProductImages({ productId, images }) {
           multiple
           accept="image/jpeg,image/png,image/webp"
           aria-label="Chọn ảnh"
-          className="block text-sm"
+          className="block w-full text-sm text-slate-600 file:mr-3 file:cursor-pointer file:rounded-xl file:border-0 file:bg-brand-50 file:px-4 file:py-2 file:text-sm file:font-semibold file:text-brand-700 hover:file:bg-brand-100"
         />
         {fileErrors.length > 0 && (
-          <ul role="alert" className="list-inside list-disc text-sm text-red-600">
+          <ul role="alert" className="list-inside list-disc text-sm text-rose-600">
             {fileErrors.map((message) => (
               <li key={message}>{message}</li>
             ))}

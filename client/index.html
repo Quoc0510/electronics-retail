@@ -4,6 +4,18 @@
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
     <title>TechStore - Thiết bị điện tử chính hãng</title>
+    <script>
+      // [F12] Đặt chế độ sáng/tối trước khi vẽ trang để không bị chớp nền trắng (khóa lưu khớp shared/src/theme.js)
+      (function () {
+        try {
+          var theme = localStorage.getItem('techstore.theme');
+          if (theme !== 'dark' && theme !== 'light') {
+            theme = matchMedia('(prefers-color-scheme: dark)').matches ? 'dark' : 'light';
+          }
+          document.documentElement.dataset.theme = theme;
+        } catch (e) {}
+      })();
+    </script>
   </head>
   <body>
     <div id="root"></div>

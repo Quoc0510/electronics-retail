@@ -4,8 +4,9 @@
  */
 import { useEffect, useState } from 'react';
 import { keepPreviousData, useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
-import { Alert, Button, getErrorMessage } from '@techstore/shared';
+import { Alert, Button, IconEdit, IconPlus, IconTrash, getErrorMessage } from '@techstore/shared';
 import { api } from '../lib/api.js';
+import PageHeader from './PageHeader.jsx';
 import TaxonomyForm from './TaxonomyForm.jsx';
 
 export default function TaxonomyPage({
@@ -61,10 +62,12 @@ export default function TaxonomyPage({
 
   return (
     <div className="space-y-4">
-      <div className="flex flex-wrap items-center justify-between gap-3">
-        <h1 className="text-2xl font-bold text-slate-900">{title}</h1>
-        <Button onClick={() => setEditing('new')}>{`Thêm ${noun}`}</Button>
-      </div>
+      <PageHeader title={title} description={`Quản lý ${noun} hiển thị trên website`}>
+        <Button onClick={() => setEditing('new')}>
+          <IconPlus size={16} />
+          {`Thêm ${noun}`}
+        </Button>
+      </PageHeader>
 
       {editing && (
         <TaxonomyForm
@@ -87,16 +90,20 @@ export default function TaxonomyPage({
         placeholder={`Tìm ${noun} theo tên...`}
         value={searchInput}
         onChange={(event) => setSearchInput(event.target.value)}
-        className="w-full max-w-sm rounded-md border border-slate-300 px-3 py-2 text-sm shadow-sm focus:border-blue-500 focus:outline-none focus:ring-2 focus:ring-blue-200"
+        className="w-full max-w-sm rounded-xl border border-slate-300 bg-white px-3.5 py-2.5 text-sm shadow-sm transition focus:border-brand-500 focus:outline-none focus:ring-4 focus:ring-brand-100"
       />
 
       {actionError && <Alert>{getErrorMessage(actionError)}</Alert>}
 
-      {isPending && <p className="text-slate-500">Đang tải...</p>}
+      {isPending && (
+        <p role="status" className="text-slate-500">
+          Đang tải...
+        </p>
+      )}
       {isError && <Alert>{getErrorMessage(error)}</Alert>}
 
       {items && items.length === 0 && (
-        <p className="rounded-md border border-dashed border-slate-300 bg-white p-8 text-center text-slate-500">
+        <p className="rounded-2xl border border-dashed border-slate-300 bg-white p-10 text-center text-slate-500">
           {search
             ? `Không có ${noun} nào khớp "${search}".`
             : `Chưa có ${noun} nào. Bấm "Thêm ${noun}" để tạo mới.`}
@@ -104,18 +111,18 @@ export default function TaxonomyPage({
       )}
 
       {items && items.length > 0 && (
-        <div className="overflow-x-auto rounded-lg bg-white shadow">
+        <div className="overflow-x-auto rounded-2xl border border-slate-200 bg-white shadow-card">
           <table className="min-w-full text-left text-sm">
-            <thead className="border-b border-slate-200 bg-slate-50 text-slate-600">
+            <thead className="border-b border-slate-200 bg-slate-50 text-xs uppercase tracking-wider text-slate-500">
               <tr>
-                <th className="px-4 py-3 font-medium">Tên</th>
-                <th className="px-4 py-3 font-medium">Slug</th>
-                <th className="px-4 py-3 font-medium">Số sản phẩm</th>
-                <th className="px-4 py-3 font-medium">Trạng thái</th>
-                <th className="px-4 py-3 font-medium">Thao tác</th>
+                <th className="whitespace-nowrap px-4 py-3 font-medium">Tên</th>
+                <th className="whitespace-nowrap px-4 py-3 font-medium">Slug</th>
+                <th className="whitespace-nowrap px-4 py-3 font-medium">Số sản phẩm</th>
+                <th className="whitespace-nowrap px-4 py-3 font-medium">Trạng thái</th>
+                <th className="whitespace-nowrap px-4 py-3 font-medium">Thao tác</th>
               </tr>
             </thead>
-            <tbody className="divide-y divide-slate-100">
+            <tbody className="divide-y divide-slate-100 [&>tr]:transition [&>tr:hover]:bg-brand-50/40">
               {items.map((item) => (
                 <tr key={item.id}>
                   <td className="px-4 py-3 font-medium text-slate-900">{item.name}</td>
@@ -123,9 +130,9 @@ export default function TaxonomyPage({
                   <td className="px-4 py-3 text-slate-600">{item.productCount}</td>
                   <td className="px-4 py-3">
                     <span
-                      className={`rounded px-2 py-0.5 text-xs font-medium ${
+                      className={`rounded-full px-2.5 py-0.5 text-xs font-semibold ${
                         item.isActive
-                          ? 'bg-green-100 text-green-700'
+                          ? 'bg-emerald-100 text-emerald-700'
                           : 'bg-slate-200 text-slate-600'
                       }`}
                     >
@@ -134,13 +141,15 @@ export default function TaxonomyPage({
                   </td>
                   <td className="px-4 py-3">
                     <div className="flex flex-wrap gap-2">
-                      <Button variant="secondary" onClick={() => setEditing(item)}>
+                      <Button variant="secondary" size="sm" onClick={() => setEditing(item)}>
+                        <IconEdit size={14} />
                         Sửa
                       </Button>
-                      <Button variant="secondary" onClick={() => toggleActive.mutate(item)}>
+                      <Button variant="ghost" size="sm" onClick={() => toggleActive.mutate(item)}>
                         {item.isActive ? 'Ẩn' : 'Hiện'}
                       </Button>
-                      <Button variant="danger" onClick={() => handleDelete(item)}>
+                      <Button variant="danger" size="sm" onClick={() => handleDelete(item)}>
+                        <IconTrash size={14} />
                         Xóa
                       </Button>
                     </div>

@@ -5,39 +5,51 @@ import { describe, expect, it } from 'vitest';
 import { screen } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { tokenStorage } from './lib/api.js';
-import { apiError, customer, mockServer, renderApp, session } from './test/utils.jsx';
+import {
+  apiError,
+  customer,
+  mockServer,
+  renderApp,
+  session,
+  storefrontApi,
+} from './test/utils.jsx';
 
-const health = { 'GET /health': [200, { status: 'ok' }] };
+const storefront = storefrontApi;
 
 describe('Trang chủ và điều hướng', () => {
-  it('hiển thị trang chủ, trạng thái máy chủ và nút Đăng nhập/Đăng ký khi chưa đăng nhập', async () => {
-    mockServer(health);
+  it('hiển thị trang chủ và nút Đăng nhập/Đăng ký khi chưa đăng nhập', async () => {
+    mockServer(storefront);
     renderApp('/');
 
-    expect(screen.getByRole('heading', { name: 'TechStore' })).toBeInTheDocument();
-    expect(await screen.findByText('Máy chủ: ok')).toBeInTheDocument();
+    expect(
+      screen.getByRole('heading', { name: 'Thiết bị điện tử chính hãng' }),
+    ).toBeInTheDocument();
+    expect(await screen.findByText(/Cửa hàng chưa có sản phẩm nào/)).toBeInTheDocument();
     expect(screen.getByRole('link', { name: 'Đăng nhập' })).toBeInTheDocument();
     expect(screen.getByRole('link', { name: 'Đăng ký' })).toBeInTheDocument();
   });
 
   it('hiển thị trang 404 khi đường dẫn không tồn tại', () => {
-    mockServer(health);
+    mockServer(storefront);
     renderApp('/khong-co-trang-nay');
 
     expect(screen.getByRole('heading', { name: '404' })).toBeInTheDocument();
   });
 
-  it('báo không kết nối được máy chủ khi API lỗi', async () => {
-    mockServer({ 'GET /health': [500, apiError('INTERNAL_ERROR', 'Lỗi')] });
+  it('báo lỗi khi API sản phẩm lỗi', async () => {
+    mockServer({
+      ...storefront,
+      'GET /products': [500, apiError('INTERNAL_ERROR', 'Lỗi máy chủ')],
+    });
     renderApp('/');
 
-    expect(await screen.findByText('Không kết nối được máy chủ')).toBeInTheDocument();
+    expect(await screen.findByRole('alert')).toHaveTextContent('Lỗi máy chủ');
   });
 });
 
 describe('Trang yêu cầu đăng nhập (US-14 AC1)', () => {
   it('chưa đăng nhập vào /tai-khoan thì bị chuyển sang trang đăng nhập', () => {
-    mockServer(health);
+    mockServer(storefront);
     renderApp('/tai-khoan');
 
     expect(screen.getByRole('heading', { name: 'Đăng nhập' })).toBeInTheDocument();
@@ -45,7 +57,7 @@ describe('Trang yêu cầu đăng nhập (US-14 AC1)', () => {
 
   it('đăng nhập xong quay lại đúng trang đang định vào', async () => {
     mockServer({
-      ...health,
+      ...storefront,
       'POST /auth/login': [200, session],
       'GET /users/me/addresses': [200, []],
     });
@@ -63,7 +75,7 @@ describe('Khôi phục phiên đăng nhập (US-03)', () => {
   it('còn refresh token thì tự đăng nhập lại khi tải trang, không bị đẩy về trang đăng nhập', async () => {
     tokenStorage.setTokens(session);
     mockServer({
-      ...health,
+      ...storefront,
       'GET /users/me': [200, customer],
       'GET /users/me/addresses': [200, []],
     });
@@ -77,7 +89,7 @@ describe('Khôi phục phiên đăng nhập (US-03)', () => {
     tokenStorage.setTokens({ accessToken: 'het-han', refreshToken: 'refresh-1' });
     let refreshed = false;
     const calls = mockServer({
-      ...health,
+      ...storefront,
       'POST /auth/refresh': () => {
         refreshed = true;
         return [200, { accessToken: 'moi', refreshToken: 'refresh-2' }];
@@ -95,7 +107,7 @@ describe('Khôi phục phiên đăng nhập (US-03)', () => {
   it('phiên hết hạn hẳn thì về trạng thái chưa đăng nhập', async () => {
     tokenStorage.setTokens({ accessToken: 'het-han', refreshToken: 'het-han' });
     mockServer({
-      ...health,
+      ...storefront,
       'POST /auth/refresh': [401, apiError('INVALID_TOKEN', 'Phiên không hợp lệ')],
       'GET /users/me': [401, apiError('INVALID_TOKEN', 'Hết hạn')],
     });
@@ -110,12 +122,14 @@ describe('Đăng xuất', () => {
   it('gọi API thu hồi token, xóa phiên và hiện lại nút Đăng nhập', async () => {
     tokenStorage.setTokens(session);
     const calls = mockServer({
-      ...health,
+      ...storefront,
       'GET /users/me': [200, customer],
       'POST /auth/logout': [204, null],
     });
     renderApp('/');
-    await userEvent.click(await screen.findByRole('button', { name: 'Đăng xuất' }));
+    // Đăng xuất nằm trong menu tài khoản: mở menu rồi chọn mục
+    await userEvent.click(await screen.findByRole('button', { name: /Xin chào, Khách A/ }));
+    await userEvent.click(screen.getByRole('menuitem', { name: 'Đăng xuất' }));
 
     expect(await screen.findByRole('link', { name: 'Đăng nhập' })).toBeInTheDocument();
     expect(calls).toContainEqual({ key: 'POST /auth/logout', body: { refreshToken: 'refresh-1' } });

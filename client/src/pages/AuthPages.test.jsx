@@ -5,13 +5,13 @@ import { describe, expect, it } from 'vitest';
 import { screen } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { api, tokenStorage } from '../lib/api.js';
-import { apiError, mockServer, renderApp, session } from '../test/utils.jsx';
+import { apiError, mockServer, renderApp, session, storefrontApi } from '../test/utils.jsx';
 
-const health = { 'GET /health': [200, { status: 'ok' }] };
+const storefront = storefrontApi;
 
 describe('Trang đăng nhập', () => {
   it('báo lỗi từng ô và không gọi API khi để trống', async () => {
-    const calls = mockServer(health);
+    const calls = mockServer(storefront);
     renderApp('/dang-nhap');
 
     await userEvent.click(screen.getByRole('button', { name: 'Đăng nhập' }));
@@ -22,7 +22,7 @@ describe('Trang đăng nhập', () => {
   });
 
   it('báo lỗi khi email sai định dạng', async () => {
-    mockServer(health);
+    mockServer(storefront);
     renderApp('/dang-nhap');
 
     await userEvent.type(screen.getByLabelText('Email'), 'khong-phai-email');
@@ -33,7 +33,7 @@ describe('Trang đăng nhập', () => {
   });
 
   it('đăng nhập thành công: gửi đúng dữ liệu, lưu token, về trang chủ và hiện tên', async () => {
-    const calls = mockServer({ ...health, 'POST /auth/login': [200, session] });
+    const calls = mockServer({ ...storefront, 'POST /auth/login': [200, session] });
     renderApp('/dang-nhap');
 
     await userEvent.type(screen.getByLabelText('Email'), '  khach@example.com ');
@@ -42,7 +42,9 @@ describe('Trang đăng nhập', () => {
 
     expect(await screen.findByText('Xin chào, Khách A')).toBeInTheDocument();
     // Chuyển về trang chủ xảy ra ngay sau khi có user nên phải chờ thay vì kiểm tra tức thì
-    expect(await screen.findByRole('heading', { name: 'TechStore' })).toBeInTheDocument();
+    expect(
+      await screen.findByRole('heading', { name: 'Thiết bị điện tử chính hãng' }),
+    ).toBeInTheDocument();
     expect(calls).toContainEqual({
       key: 'POST /auth/login',
       body: { email: 'khach@example.com', password: 'Matkhau123' },
@@ -52,7 +54,7 @@ describe('Trang đăng nhập', () => {
 
   it('sai mật khẩu: hiện thông báo của máy chủ và không lưu token', async () => {
     mockServer({
-      ...health,
+      ...storefront,
       'POST /auth/login': [401, apiError('INVALID_CREDENTIALS', 'Email hoặc mật khẩu không đúng')],
     });
     renderApp('/dang-nhap');
@@ -67,7 +69,7 @@ describe('Trang đăng nhập', () => {
 
   it('tài khoản bị khóa: hiện thông báo từ máy chủ', async () => {
     mockServer({
-      ...health,
+      ...storefront,
       'POST /auth/login': [
         403,
         apiError('ACCOUNT_LOCKED', 'Tài khoản đã bị khóa, vui lòng liên hệ cửa hàng'),
@@ -84,7 +86,7 @@ describe('Trang đăng nhập', () => {
 
   it('quá số lần thử: hiện thông báo giới hạn (US-02 AC4)', async () => {
     mockServer({
-      ...health,
+      ...storefront,
       'POST /auth/login': [
         429,
         apiError('RATE_LIMITED', 'Bạn đăng nhập sai quá nhiều lần, hãy thử lại sau'),
@@ -100,7 +102,7 @@ describe('Trang đăng nhập', () => {
   });
 
   it('mất kết nối máy chủ: hiện thông báo thân thiện', async () => {
-    mockServer(health);
+    mockServer(storefront);
     // Ghi đè bằng adapter báo lỗi mạng (không có phản hồi từ máy chủ)
     api.defaults.adapter = () =>
       Promise.reject(Object.assign(new Error('Network Error'), { code: 'ERR_NETWORK' }));
@@ -115,14 +117,16 @@ describe('Trang đăng nhập', () => {
 
   it('đã đăng nhập mà vào /dang-nhap thì chuyển về trang chủ', async () => {
     tokenStorage.setTokens(session);
-    mockServer({ ...health, 'GET /users/me': [200, session.user] });
+    mockServer({ ...storefront, 'GET /users/me': [200, session.user] });
     renderApp('/dang-nhap');
 
-    expect(await screen.findByRole('heading', { name: 'TechStore' })).toBeInTheDocument();
+    expect(
+      await screen.findByRole('heading', { name: 'Thiết bị điện tử chính hãng' }),
+    ).toBeInTheDocument();
   });
 
   it('có liên kết sang trang đăng ký', () => {
-    mockServer(health);
+    mockServer(storefront);
     renderApp('/dang-nhap');
 
     expect(screen.getByRole('link', { name: 'Đăng ký ngay' })).toHaveAttribute('href', '/dang-ky');
@@ -144,7 +148,7 @@ describe('Trang đăng ký', () => {
   };
 
   it('báo lỗi khi để trống các ô bắt buộc', async () => {
-    mockServer(health);
+    mockServer(storefront);
     renderApp('/dang-ky');
 
     await userEvent.click(screen.getByRole('button', { name: 'Đăng ký' }));
@@ -155,7 +159,7 @@ describe('Trang đăng ký', () => {
   });
 
   it('từ chối mật khẩu không có chữ số (US-01 AC2)', async () => {
-    mockServer(health);
+    mockServer(storefront);
     renderApp('/dang-ky');
 
     await fillValid({ 'Mật khẩu': 'Matkhaucuatoi', 'Nhập lại mật khẩu': 'Matkhaucuatoi' });
@@ -165,7 +169,7 @@ describe('Trang đăng ký', () => {
   });
 
   it('báo lỗi khi nhập lại mật khẩu không khớp', async () => {
-    mockServer(health);
+    mockServer(storefront);
     renderApp('/dang-ky');
 
     await fillValid({ 'Nhập lại mật khẩu': 'Khac12345' });
@@ -175,7 +179,7 @@ describe('Trang đăng ký', () => {
   });
 
   it('báo lỗi khi số điện thoại sai định dạng', async () => {
-    mockServer(health);
+    mockServer(storefront);
     renderApp('/dang-ky');
 
     await fillValid({ 'Số điện thoại (không bắt buộc)': '123' });
@@ -185,7 +189,7 @@ describe('Trang đăng ký', () => {
   });
 
   it('đăng ký thành công: không gửi trường phone khi để trống, tự đăng nhập luôn', async () => {
-    const calls = mockServer({ ...health, 'POST /auth/register': [201, session] });
+    const calls = mockServer({ ...storefront, 'POST /auth/register': [201, session] });
     renderApp('/dang-ky');
 
     await fillValid();
@@ -199,7 +203,7 @@ describe('Trang đăng ký', () => {
   });
 
   it('gửi kèm số điện thoại khi có nhập', async () => {
-    const calls = mockServer({ ...health, 'POST /auth/register': [201, session] });
+    const calls = mockServer({ ...storefront, 'POST /auth/register': [201, session] });
     renderApp('/dang-ky');
 
     await fillValid({ 'Số điện thoại (không bắt buộc)': '0912345678' });
@@ -211,7 +215,7 @@ describe('Trang đăng ký', () => {
 
   it('email đã tồn tại: hiện thông báo của máy chủ (US-01 AC4)', async () => {
     mockServer({
-      ...health,
+      ...storefront,
       'POST /auth/register': [409, apiError('EMAIL_TAKEN', 'Email này đã được đăng ký')],
     });
     renderApp('/dang-ky');
@@ -224,7 +228,7 @@ describe('Trang đăng ký', () => {
 
   it('máy chủ báo lỗi theo ô: hiện ngay dưới ô đó', async () => {
     mockServer({
-      ...health,
+      ...storefront,
       'POST /auth/register': [
         400,
         apiError('VALIDATION_ERROR', 'Dữ liệu không hợp lệ', {

@@ -1,0 +1,274 @@
+/**
+ * @feature [F04] Hệ thống thiết kế (design tokens) dùng chung cho Client và Admin.
+ * Phong cách "công nghệ": nền sáng dễ đọc, khung đầu trang/banner/chân trang tối, màu nhấn chàm - tím, điểm nhấn cyan.
+ * Đổi màu hay font của cả hai ứng dụng chỉ cần sửa file này.
+ * [F12] Chế độ tối: xem khối "Chế độ tối" ở cuối file.
+ *
+ * Độ tương phản (WCAG AA >= 4.5:1 cho chữ thường):
+ *  - chữ trắng trên brand-600 (#4f46e5): 6.3:1
+ *  - chữ slate-500 trên nền trắng: 4.8:1; slate-700 trên nền trắng: 10:1
+ *  - chữ slate-300 trên ink-900: 12:1
+ */
+@theme {
+  --font-sans: 'Inter Variable', ui-sans-serif, system-ui, 'Segoe UI', sans-serif;
+  --font-display: 'Space Grotesk Variable', 'Inter Variable', ui-sans-serif, system-ui, sans-serif;
+
+  /* Màu thương hiệu: chàm */
+  --color-brand-50: #eef2ff;
+  --color-brand-100: #e0e7ff;
+  --color-brand-200: #c7d2fe;
+  --color-brand-300: #a5b4fc;
+  --color-brand-400: #818cf8;
+  --color-brand-500: #6366f1;
+  --color-brand-600: #4f46e5;
+  --color-brand-700: #4338ca;
+  --color-brand-800: #3730a3;
+  --color-brand-900: #312e81;
+
+  /* Màu nhấn: cyan (dùng cho chi tiết nhỏ trên nền tối) */
+  --color-accent-300: #67e8f9;
+  --color-accent-400: #22d3ee;
+  --color-accent-500: #06b6d4;
+
+  /* Nền tối: xanh đen */
+  --color-ink-950: #060914;
+  --color-ink-900: #0b1020;
+  --color-ink-800: #121a33;
+  --color-ink-700: #1b2547;
+
+  --shadow-glow: 0 12px 40px -12px rgb(99 102 241 / 0.55);
+  --shadow-card: 0 1px 2px rgb(15 23 42 / 0.06), 0 8px 24px -12px rgb(15 23 42 / 0.12);
+  --shadow-card-hover: 0 4px 6px rgb(15 23 42 / 0.05), 0 24px 48px -16px rgb(79 70 229 / 0.35);
+
+  --animate-fade-up: fade-up 0.5s cubic-bezier(0.22, 1, 0.36, 1) both;
+  --animate-fade-in: fade-in 0.35s ease-out both;
+  --animate-shimmer: shimmer 1.6s linear infinite;
+  --animate-spin-slow: spin 0.8s linear infinite;
+
+  @keyframes fade-up {
+    from {
+      opacity: 0;
+      transform: translateY(12px);
+    }
+    to {
+      opacity: 1;
+      transform: none;
+    }
+  }
+  @keyframes fade-in {
+    from {
+      opacity: 0;
+    }
+    to {
+      opacity: 1;
+    }
+  }
+  @keyframes shimmer {
+    from {
+      background-position: 200% 0;
+    }
+    to {
+      background-position: -200% 0;
+    }
+  }
+}
+
+/* Lưới chấm mờ dùng làm nền trang trí cho banner tối */
+@utility bg-tech-grid {
+  background-image:
+    linear-gradient(to right, rgb(255 255 255 / 0.05) 1px, transparent 1px),
+    linear-gradient(to bottom, rgb(255 255 255 / 0.05) 1px, transparent 1px);
+  background-size: 48px 48px;
+}
+
+/* Khung chờ (skeleton) có vệt sáng chạy qua */
+@utility skeleton {
+  background: linear-gradient(
+    90deg,
+    var(--color-slate-200) 25%,
+    var(--color-slate-100) 37%,
+    var(--color-slate-200) 63%
+  );
+  background-size: 400% 100%;
+  animation: var(--animate-shimmer);
+}
+
+@layer base {
+  html {
+    scroll-behavior: smooth;
+  }
+
+  body {
+    font-family: var(--font-sans);
+    color: var(--color-slate-800);
+    background-color: var(--color-slate-50);
+    -webkit-font-smoothing: antialiased;
+  }
+
+  h1,
+  h2,
+  h3 {
+    font-family: var(--font-display);
+    letter-spacing: -0.01em;
+  }
+
+  /* Vòng focus rõ ràng cho người dùng bàn phím */
+  :focus-visible {
+    outline: 2px solid var(--color-brand-500);
+    outline-offset: 2px;
+  }
+
+  /* Người dùng bật "giảm chuyển động" trong hệ điều hành thì tắt hoạt ảnh */
+  @media (prefers-reduced-motion: reduce) {
+    html {
+      scroll-behavior: auto;
+    }
+    *,
+    *::before,
+    *::after {
+      animation-duration: 0.01ms !important;
+      animation-iteration-count: 1 !important;
+      transition-duration: 0.01ms !important;
+    }
+  }
+}
+
+/*
+ * [F12] Chế độ tối (dark mode).
+ * Cách làm: Tailwind v4 sinh mọi lớp màu từ biến CSS (--color-slate-*, ...). Khi <html data-theme="dark"> ta ĐẢO thang màu xám
+ * (slate-50 thành nền tối, slate-900 thành chữ sáng) nên không phải sửa từng component, chỉ cần các lớp "bg-white", chữ
+ * màu thương hiệu và vài màu trạng thái được bổ sung ở dưới.
+ *  - .surface-dark: vùng luôn tối ở cả hai chế độ (đầu trang, chân trang, banner, thanh bên Admin). Bên trong vùng này
+ *    các biến được trả về giá trị gốc nên thiết kế dành riêng cho nền tối không bị đảo.
+ *  - .follow-theme: đặt bên trong .surface-dark khi muốn một phần tử (ví dụ menu thả xuống) lại theo chế độ hiện tại.
+ * Độ tương phản chữ trong chế độ tối: slate-500 trên thẻ ~7:1, slate-400 ~5:1, brand-400 ~5.6:1 (đều đạt AA).
+ */
+:root[data-theme='dark'],
+:root[data-theme='dark'] .surface-dark .follow-theme {
+  color-scheme: dark;
+  --surface-card: #111a30;
+
+  --color-slate-50: #0a0f1f;
+  --color-slate-100: #1a2440;
+  --color-slate-200: #26314f;
+  --color-slate-300: #3a4870;
+  --color-slate-400: #7d8aa8;
+  --color-slate-500: #98a4bf;
+  --color-slate-600: #b3bdd3;
+  --color-slate-700: #cdd5e6;
+  --color-slate-800: #e2e8f4;
+  --color-slate-900: #f1f5fb;
+  --color-slate-950: #f8fafc;
+
+  /* Nền, viền nhạt của màu thương hiệu và màu trạng thái (chỉ dùng làm nền/viền, không dùng làm chữ) */
+  --color-brand-50: #181d4a;
+  --color-brand-100: #222a66;
+  --color-brand-200: #343d8f;
+  --color-brand-300: #4f5bb8;
+  --color-rose-50: #2a1019;
+  --color-rose-100: #3b1522;
+  --color-rose-200: #6b2237;
+  --color-emerald-50: #0d2a22;
+  --color-emerald-100: #11382c;
+  --color-emerald-200: #1c5a45;
+
+  /* Chữ màu thương hiệu/trạng thái sáng hơn để đọc được trên nền tối */
+  --text-brand-600: #818cf8;
+  --text-brand-700: #a5b4fc;
+  --text-brand-800: #c7d2fe;
+  --text-rose-600: #fb7185;
+  --text-rose-700: #fda4af;
+  --text-rose-800: #fecdd3;
+  --text-emerald-700: #6ee7b7;
+  --text-emerald-800: #a7f3d0;
+
+  --shadow-card: 0 1px 2px rgb(0 0 0 / 0.4), 0 8px 24px -12px rgb(0 0 0 / 0.6);
+  --shadow-card-hover: 0 4px 6px rgb(0 0 0 / 0.3), 0 24px 48px -16px rgb(99 102 241 / 0.45);
+}
+
+/* Vùng luôn tối: trả các biến về giá trị gốc của chế độ sáng */
+:root[data-theme='dark'] .surface-dark {
+  --surface-card: #ffffff;
+  --color-slate-50: #f8fafc;
+  --color-slate-100: #f1f5f9;
+  --color-slate-200: #e2e8f0;
+  --color-slate-300: #cbd5e1;
+  --color-slate-400: #94a3b8;
+  --color-slate-500: #64748b;
+  --color-slate-600: #475569;
+  --color-slate-700: #334155;
+  --color-slate-800: #1e293b;
+  --color-slate-900: #0f172a;
+  --color-slate-950: #020617;
+  --color-brand-50: #eef2ff;
+  --color-brand-100: #e0e7ff;
+  --color-brand-200: #c7d2fe;
+  --color-brand-300: #a5b4fc;
+  --color-rose-50: #fff1f2;
+  --color-rose-100: #ffe4e6;
+  --color-rose-200: #fecdd3;
+  --color-emerald-50: #ecfdf5;
+  --color-emerald-100: #d1fae5;
+  --color-emerald-200: #a7f3d0;
+  --text-brand-600: initial;
+  --text-brand-700: initial;
+  --text-brand-800: initial;
+  --text-rose-600: initial;
+  --text-rose-700: initial;
+  --text-rose-800: initial;
+  --text-emerald-700: initial;
+  --text-emerald-800: initial;
+  --shadow-card: 0 1px 2px rgb(15 23 42 / 0.06), 0 8px 24px -12px rgb(15 23 42 / 0.12);
+  --shadow-card-hover: 0 4px 6px rgb(15 23 42 / 0.05), 0 24px 48px -16px rgb(79 70 229 / 0.35);
+}
+
+/*
+ * Các lớp dùng màu mà Tailwind không đọc từ biến có thể đảo được. Ở chế độ sáng biến --surface-card/--text-* chưa
+ * được đặt nên dùng đúng giá trị gốc (var(..., giá trị gốc)), tức chế độ sáng không thay đổi gì.
+ */
+@layer utilities {
+  .bg-white {
+    background-color: var(--surface-card, #fff);
+  }
+  .bg-white\/80,
+  .bg-white\/90,
+  .bg-white\/95 {
+    background-color: color-mix(in srgb, var(--surface-card, #fff) 92%, transparent);
+  }
+  .text-brand-600,
+  .hover\:text-brand-600:hover {
+    color: var(--text-brand-600, var(--color-brand-600));
+  }
+  .text-brand-700,
+  .hover\:text-brand-700:hover,
+  .group:hover .group-hover\:text-brand-700 {
+    color: var(--text-brand-700, var(--color-brand-700));
+  }
+  .text-brand-800,
+  .hover\:text-brand-800:hover {
+    color: var(--text-brand-800, var(--color-brand-800));
+  }
+  .text-rose-600,
+  .hover\:text-rose-600:hover {
+    color: var(--text-rose-600, var(--color-rose-600));
+  }
+  .text-rose-700,
+  .hover\:text-rose-700:hover {
+    color: var(--text-rose-700, var(--color-rose-700));
+  }
+  .text-rose-800 {
+    color: var(--text-rose-800, var(--color-rose-800));
+  }
+  .text-emerald-700 {
+    color: var(--text-emerald-700, var(--color-emerald-700));
+  }
+  .text-emerald-800 {
+    color: var(--text-emerald-800, var(--color-emerald-800));
+  }
+  .from-white {
+    --tw-gradient-from: var(--surface-card, #fff);
+  }
+  .to-white {
+    --tw-gradient-to: var(--surface-card, #fff);
+  }
+}

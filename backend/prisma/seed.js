@@ -6,9 +6,13 @@
  * Trên môi trường thật phải đặt SEED_ADMIN_PASSWORD bằng mật khẩu mạnh qua biến môi trường.
  */
 import 'dotenv/config';
+import fs from 'node:fs';
+import path from 'node:path';
 import bcrypt from 'bcryptjs';
 import { PrismaClient } from '@prisma/client';
+import { env } from '../src/config/env.js';
 import { slugify } from '../src/utils/slugify.js';
+import { renderProductArt } from './productArt.js';
 
 const prisma = new PrismaClient();
 
@@ -17,6 +21,26 @@ const BCRYPT_COST = 10; // NFR-03: cost >= 10
 const categories = ['Điện thoại', 'Laptop', 'Máy tính bảng', 'Phụ kiện', 'Đồng hồ thông minh'];
 
 const brands = ['Apple', 'Samsung', 'Xiaomi', 'Dell', 'ASUS', 'Sony', 'Anker'];
+
+// [F04] Loại thiết bị và tông màu của ảnh minh họa cho từng SKU (xem productArt.js)
+const ART = {
+  'IP15-128': { kind: 'phone', tone: 0 },
+  'IP15PM-256': { kind: 'phone', tone: 1 },
+  'SS-S24U-256': { kind: 'phone', tone: 2 },
+  'SS-A55-128': { kind: 'phone', tone: 1 },
+  'XM-RN13P': { kind: 'phone', tone: 0 },
+  'MBA-M2-256': { kind: 'laptop', tone: 0 },
+  'DELL-XPS13': { kind: 'laptop', tone: 1 },
+  'ASUS-VB15': { kind: 'laptop', tone: 0 },
+  'ASUS-G16': { kind: 'laptop', tone: 1 },
+  'IPAD-AIR-M2': { kind: 'tablet', tone: 0 },
+  'SS-TABS9FE': { kind: 'tablet', tone: 1 },
+  'SONY-XM5': { kind: 'headphones', tone: 0 },
+  'ANK-737': { kind: 'powerbank', tone: 0 },
+  'ANK-C100': { kind: 'cable', tone: 0 },
+  'AW-S9-41': { kind: 'watch', tone: 0 },
+  'SS-GW6-44': { kind: 'watch', tone: 1 },
+};
 
 // stock thấp (<= 5) ở vài sản phẩm để thử tính năng cảnh báo tồn kho ở dashboard (US-26)
 const products = [
@@ -296,8 +320,7 @@ async function main() {
   // --- Sản phẩm và ảnh (F03) ---
   for (const { category, brand, ...data } of products) {
     const slug = slugify(data.name);
-    const imageUrl = `https://placehold.co/600x600?text=${encodeURIComponent(data.name)}`;
-    await prisma.product.upsert({
+    const saved = await prisma.product.upsert({
       where: { sku: data.sku },
       update: {},
       create: {
@@ -306,9 +329,29 @@ async function main() {
         description: `${data.name} chính hãng, bảo hành 12 tháng.`,
         categoryId: categoryIds[category],
         brandId: brandIds[brand],
-        images: { create: [{ url: imageUrl, sortOrder: 0 }] },
       },
     });
+
+    // [F04] Ảnh minh họa SVG tự sinh, lưu vào thư mục uploads/seed (được .gitignore bỏ qua nên không đưa vào Git)
+    const { kind, tone } = ART[data.sku];
+    const fileName = `${data.sku.toLowerCase()}.svg`;
+    fs.mkdirSync(path.join(env.uploadDir, 'seed'), { recursive: true });
+    fs.writeFileSync(
+      path.join(env.uploadDir, 'seed', fileName),
+      renderProductArt({ kind, tone, brand }),
+    );
+    const url = `/uploads/seed/${fileName}`;
+
+    // Chưa có ảnh thì tạo; còn ảnh mẫu cũ (placehold.co) thì thay bằng ảnh mới; ảnh do quản trị viên tải lên được giữ nguyên
+    const existing = await prisma.productImage.findFirst({
+      where: { productId: saved.id },
+      orderBy: { sortOrder: 'asc' },
+    });
+    if (!existing) {
+      await prisma.productImage.create({ data: { productId: saved.id, url, sortOrder: 0 } });
+    } else if (existing.url.startsWith('https://placehold.co')) {
+      await prisma.productImage.update({ where: { id: existing.id }, data: { url } });
+    }
   }
 
   // eslint-disable-next-line no-console

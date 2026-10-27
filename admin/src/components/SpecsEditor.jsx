@@ -9,7 +9,7 @@ export default function SpecsEditor({ rows, onChange, error }) {
     onChange(rows.map((row, i) => (i === index ? { ...row, [field]: value } : row)));
 
   const inputClass =
-    'w-full rounded-md border border-slate-300 px-3 py-2 text-sm shadow-sm focus:border-blue-500 focus:outline-none focus:ring-2 focus:ring-blue-200';
+    'w-full rounded-xl border border-slate-300 bg-white px-3.5 py-2.5 text-sm shadow-sm transition focus:border-brand-500 focus:outline-none focus:ring-4 focus:ring-brand-100';
 
   return (
     <fieldset className="space-y-2">
@@ -46,7 +46,7 @@ export default function SpecsEditor({ rows, onChange, error }) {
       ))}
 
       {error && (
-        <p role="alert" className="text-sm text-red-600">
+        <p role="alert" className="text-sm text-rose-600">
           {error}
         </p>
       )}

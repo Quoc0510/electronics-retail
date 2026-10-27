@@ -6,6 +6,7 @@ import { useEffect, useState } from 'react';
 import { Link, Navigate, useLocation } from 'react-router-dom';
 import { Alert, Button, FormField, isValidEmail, useFormState } from '@techstore/shared';
 import { useAuth } from '../context/AuthContext.jsx';
+import AuthShell from '../components/AuthShell.jsx';
 
 const validate = ({ email, password }) => {
   const errors = {};
@@ -32,9 +33,18 @@ export default function LoginPage() {
   if (user) return <Navigate to={redirectTo} replace />;
 
   return (
-    <div className="mx-auto max-w-md rounded-lg bg-white p-6 shadow">
-      <h1 className="mb-6 text-2xl font-bold text-slate-900">Đăng nhập</h1>
-
+    <AuthShell
+      title="Đăng nhập"
+      subtitle="Chào mừng bạn quay lại TechStore"
+      footer={
+        <>
+          Chưa có tài khoản?{' '}
+          <Link to="/dang-ky" className="font-semibold text-brand-600 hover:underline">
+            Đăng ký ngay
+          </Link>
+        </>
+      }
+    >
       <form
         onSubmit={form.handleSubmit(validate, ({ email, password }) =>
           login(email.trim(), password),
@@ -53,17 +63,10 @@ export default function LoginPage() {
           {...form.bind('password')}
         />
 
-        <Button type="submit" loading={form.submitting} className="w-full">
+        <Button type="submit" loading={form.submitting} className="w-full" size="lg">
           Đăng nhập
         </Button>
       </form>
-
-      <p className="mt-4 text-center text-sm text-slate-600">
-        Chưa có tài khoản?{' '}
-        <Link to="/dang-ky" className="font-medium text-blue-600 hover:underline">
-          Đăng ký ngay
-        </Link>
-      </p>
-    </div>
+    </AuthShell>
   );
 }

@@ -56,7 +56,7 @@ export default function TaxonomyForm({
     <form
       onSubmit={form.handleSubmit(validate, submit)}
       aria-label={item ? `Sửa ${noun}` : `Thêm ${noun}`}
-      className="space-y-4 rounded-lg bg-white p-4 shadow"
+      className="space-y-4 rounded-2xl border border-slate-200 bg-white p-6 shadow-card"
       noValidate
     >
       <h2 className="text-lg font-semibold text-slate-900">

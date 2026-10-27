@@ -16,3 +16,7 @@ export const resolveAssetUrl = (url, origin = '') => {
   if (!url) return null;
   return /^https?:\/\//i.test(url) ? url : `${origin}${url}`;
 };
+
+/** Phần trăm giảm giá làm tròn: giá gốc 20.000.000, khuyến mãi 18.000.000 -> 10. Trả 0 nếu không có khuyến mãi. */
+export const discountPercent = (price, salePrice) =>
+  salePrice && price > 0 && salePrice < price ? Math.round((1 - salePrice / price) * 100) : 0;

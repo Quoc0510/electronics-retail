@@ -11,5 +11,16 @@ export { useFormState } from './useFormState.js';
 export { default as Alert } from './ui/Alert.jsx';
 export { default as Button } from './ui/Button.jsx';
 export { default as FormField } from './ui/FormField.jsx';
-export { formatVnd, resolveAssetUrl } from './format.js'; // [F03]
+export { discountPercent, formatVnd, resolveAssetUrl } from './format.js'; // [F03][F04]
 export { default as SelectField } from './ui/SelectField.jsx'; // [F03]
+export { default as Logo } from './ui/Logo.jsx'; // [F04]
+export * from './ui/icons.jsx'; // [F04] IconSearch, IconPhone...
+export { default as ThemeToggle } from './ui/ThemeToggle.jsx'; // [F12]
+export {
+  THEME_STORAGE_KEY,
+  getTheme,
+  initTheme,
+  resolveInitialTheme,
+  setTheme,
+  useTheme,
+} from './theme.js'; // [F12]
