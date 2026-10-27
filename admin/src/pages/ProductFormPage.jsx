@@ -14,6 +14,7 @@ import {
   getErrorMessage,
   useFormState,
 } from '@techstore/shared';
+import PageHeader from '../components/PageHeader.jsx';
 import ProductImages from '../components/ProductImages.jsx';
 import SpecsEditor from '../components/SpecsEditor.jsx';
 import { api } from '../lib/api.js';
@@ -108,7 +109,7 @@ function ProductForm({ product, categories, brands }) {
     <form
       onSubmit={form.handleSubmit(validate, submit)}
       aria-label={product ? 'Sửa sản phẩm' : 'Thêm sản phẩm'}
-      className="space-y-4 rounded-lg bg-white p-4 shadow"
+      className="space-y-5 rounded-2xl border border-slate-200 bg-white p-6 shadow-card"
       noValidate
     >
       {form.serverError && <Alert>{form.serverError}</Alert>}
@@ -163,7 +164,7 @@ function ProductForm({ product, categories, brands }) {
         </Button>
         <Link
           to="/san-pham"
-          className="inline-flex items-center rounded-md border border-slate-300 px-4 py-2 text-sm font-medium text-slate-700 hover:bg-slate-50"
+          className="inline-flex items-center rounded-xl border border-slate-300 bg-white px-4 py-2 text-sm font-semibold text-slate-700 transition hover:border-brand-300 hover:bg-brand-50"
         >
           Quay lại danh sách
         </Link>
@@ -195,16 +196,25 @@ export default function ProductFormPage() {
   const loadError = categories.error ?? brands.error ?? product.error;
 
   return (
-    <div className="space-y-4">
-      <h1 className="text-2xl font-bold text-slate-900">
-        {isEdit ? 'Sửa sản phẩm' : 'Thêm sản phẩm'}
-      </h1>
+    <div className="space-y-5">
+      <PageHeader
+        title={isEdit ? 'Sửa sản phẩm' : 'Thêm sản phẩm'}
+        description={
+          isEdit
+            ? 'Cập nhật thông tin, giá, tồn kho và ảnh sản phẩm'
+            : 'Nhập thông tin sản phẩm mới'
+        }
+      />
 
       {location.state?.created && (
         <Alert type="success">Đã tạo sản phẩm. Hãy thêm ảnh ở phần bên dưới.</Alert>
       )}
 
-      {loading && !loadError && <p className="text-slate-500">Đang tải...</p>}
+      {loading && !loadError && (
+        <p role="status" className="text-slate-500">
+          Đang tải...
+        </p>
+      )}
       {loadError && <Alert>{getErrorMessage(loadError)}</Alert>}
 
       {!loading && !loadError && (

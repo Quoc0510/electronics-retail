@@ -13,6 +13,7 @@ import {
   validatePassword,
 } from '@techstore/shared';
 import { useAuth } from '../context/AuthContext.jsx';
+import AuthShell from '../components/AuthShell.jsx';
 
 const validate = ({ fullName, email, phone, password, confirmPassword }) => {
   const errors = {};
@@ -53,9 +54,18 @@ export default function RegisterPage() {
     });
 
   return (
-    <div className="mx-auto max-w-md rounded-lg bg-white p-6 shadow">
-      <h1 className="mb-6 text-2xl font-bold text-slate-900">Đăng ký tài khoản</h1>
-
+    <AuthShell
+      title="Đăng ký tài khoản"
+      subtitle="Tạo tài khoản để đặt hàng và theo dõi đơn dễ dàng"
+      footer={
+        <>
+          Đã có tài khoản?{' '}
+          <Link to="/dang-nhap" className="font-semibold text-brand-600 hover:underline">
+            Đăng nhập
+          </Link>
+        </>
+      }
+    >
       <form onSubmit={form.handleSubmit(validate, submit)} className="space-y-4" noValidate>
         {form.serverError && <Alert>{form.serverError}</Alert>}
 
@@ -81,17 +91,10 @@ export default function RegisterPage() {
           {...form.bind('confirmPassword')}
         />
 
-        <Button type="submit" loading={form.submitting} className="w-full">
+        <Button type="submit" loading={form.submitting} className="w-full" size="lg">
           Đăng ký
         </Button>
       </form>
-
-      <p className="mt-4 text-center text-sm text-slate-600">
-        Đã có tài khoản?{' '}
-        <Link to="/dang-nhap" className="font-medium text-blue-600 hover:underline">
-          Đăng nhập
-        </Link>
-      </p>
-    </div>
+    </AuthShell>
   );
 }

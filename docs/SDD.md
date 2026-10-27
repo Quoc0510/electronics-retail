@@ -350,6 +350,34 @@ Quyết định thiết kế F03:
 - Nơi lưu ảnh tách riêng ở `backend/src/lib/storage.js` để sau này đổi sang dịch vụ đám mây (xem [TECH_DEBT.md](TECH_DEBT.md), mục 2).
 - API công khai cho khách xem sản phẩm (chỉ sản phẩm đang bán) làm ở F04.
 
+### F04 - Duyệt và tìm sản phẩm (API công khai, không cần đăng nhập)
+
+| Method | Đường dẫn           | Mô tả                                                                                       | User story          |
+| ------ | ------------------- | ------------------------------------------------------------------------------------------- | ------------------- |
+| GET    | /api/products       | Danh sách `{ items, page, pageSize, total }`; tham số bên dưới                              | US-10, US-11, US-12 |
+| GET    | /api/products/:slug | Chi tiết theo slug: mô tả, thông số, danh sách ảnh theo thứ tự, `inStock`; 404 nếu không có | US-13               |
+
+Tham số của `GET /api/products`:
+
+| Tham số                | Mặc định | Ý nghĩa                                                                                          |
+| ---------------------- | -------- | ------------------------------------------------------------------------------------------------ |
+| `page`, `pageSize`     | 1, 12    | Phân trang; `pageSize` tối đa 48                                                                 |
+| `search`               | -        | Tìm theo tên, không phân biệt hoa thường; rỗng thì trả toàn bộ                                   |
+| `category`, `brand`    | -        | Lọc theo **slug** của danh mục, thương hiệu                                                      |
+| `minPrice`, `maxPrice` | -        | Lọc theo **giá bán hiện hành** (giá khuyến mãi nếu có, ngược lại giá gốc, BR-02); số nguyên đồng |
+| `sort`                 | `newest` | `newest` (mới nhất), `price_asc`, `price_desc`; sắp xếp giá cũng theo giá bán hiện hành          |
+| `onSale`               | -        | Chỉ nhận giá trị `true`: chỉ trả sản phẩm đang có giá khuyến mãi (`sale_price IS NOT NULL`)      |
+
+Phản hồi chỉ chứa dữ liệu khách cần: `id, name, slug, price, salePrice, inStock, thumbnail, category{name,slug}, brand{name,slug}`. **Không lộ** tồn kho chính xác, SKU (ở danh sách), trạng thái ẩn/hiện, thời gian tạo.
+
+Quyết định thiết kế F04:
+
+- **Quy tắc hiển thị:** khách chỉ thấy sản phẩm đang bán **và** thuộc danh mục, thương hiệu đang hiện. Ẩn một danh mục thì mọi sản phẩm trong đó cũng biến mất khỏi website (US-06 AC3). Chi tiết của sản phẩm không thỏa các điều kiện này trả 404 (US-13 AC3).
+- **Một đường truy vấn duy nhất cho lọc và sắp xếp:** danh sách dùng SQL thuần qua `Prisma.sql` vì Prisma chưa hỗ trợ sắp xếp theo `COALESCE(sale_price, price)`. Mọi giá trị người dùng đều đi qua tham số (không nối chuỗi) nên không bị SQL injection; riêng `ORDER BY` chỉ chọn trong danh sách cố định. Hai truy vấn dùng chung điều kiện: lấy id của trang hiện tại và đếm tổng; sau đó nạp thông tin đầy đủ theo id và xếp lại đúng thứ tự.
+- **Ký tự `%` và `_` trong từ khóa được thoát** (`escapeLike`) để người dùng gõ `100%` tìm đúng chuỗi "100%", không khớp mọi sản phẩm.
+- Chi tiết dùng **slug** (không dùng id) để đường dẫn dễ đọc, chia sẻ được.
+- Hạn chế đã biết của tìm kiếm: chưa bỏ dấu tiếng Việt (gõ "dien thoai" không ra "Điện thoại"), xem [TECH_DEBT.md](TECH_DEBT.md).
+
 ### Quyết định bảo mật của F01
 
 - Access token JWT sống 15 phút; refresh token là chuỗi ngẫu nhiên 256 bit sống 7 ngày, DB chỉ lưu bản băm SHA-256.
@@ -406,3 +434,114 @@ sequenceDiagram
 - Nút gửi form bị khóa khi đang xử lý để người dùng không gửi hai lần.
 - Admin chỉ chấp nhận vai trò ADMIN ở tầng giao diện (`isAllowed`) và backend vẫn chặn `/api/admin/*` bằng quyền; giao diện chỉ là lớp thân thiện, không phải lớp bảo mật.
 - Khách hàng đăng nhập nhầm vào Admin sẽ bị thu hồi phiên ngay, không để token tồn tại.
+
+## 11. Giao diện khách hàng F04 (Client)
+
+### Route
+
+| Đường dẫn         | Trang              | Ghi chú                                                                              | User story   |
+| ----------------- | ------------------ | ------------------------------------------------------------------------------------ | ------------ |
+| `/`               | Trang chủ          | Banner slider, cam kết dịch vụ, ô danh mục, khối khuyến mãi, 8 sản phẩm mới nhất     | US-10        |
+| `/san-pham`       | Danh sách sản phẩm | Bộ lọc, sắp xếp, tìm kiếm, phân trang **đều nằm trên URL**                           | US-11, US-12 |
+| `/san-pham/:slug` | Chi tiết sản phẩm  | Ảnh, giá, còn/hết hàng, mô tả, thông số; sản phẩm không có thì hiện "không tìm thấy" | US-13        |
+
+Các tham số URL của trang danh sách trùng tên với tham số API (`search`, `category`, `brand`, `minPrice`, `maxPrice`, `sort`, `page`), nên chia sẻ đường dẫn, tải lại hay bấm Back đều đúng kết quả. Trang **không giữ state riêng cho bộ lọc**: đọc từ URL, đổi bộ lọc là ghi lên URL; tham số sai (`page=abc`) về mặc định thay vì làm hỏng trang.
+
+### Thành phần
+
+```
+components/  ProductCard, ProductGrid (khung chờ / lỗi + Thử lại / rỗng), Price (khuyến mãi, %), Pagination, SearchBox
+  layout/    AccountMenu, CategoryBar, Footer
+  home/      HeroSlider, TrustStrip, CategoryTiles
+  list/      FilterPanel, FilterDrawer, ActiveFilters
+  detail/    ProductGallery (phóng to), StickyPriceBar
+pages/       HomePage, ProductListPage, ProductDetailPage
+```
+
+### Quyết định thiết kế
+
+- Mọi khối dữ liệu có đủ trạng thái biên (rubric TC2.2): đang tải, lỗi mạng kèm nút Thử lại, danh sách rỗng, trang vượt quá số trang.
+- Khi đổi bộ lọc, bảng cũ vẫn hiện trong lúc tải kết quả mới (`keepPreviousData`), không nhấp nháy.
+- Chi tiết 404 không thử lại (vô ích); lỗi khác thử lại một lần rồi mới báo.
+- Trên điện thoại ô tìm kiếm xuống dòng riêng; lưới sản phẩm 2 cột (điện thoại), 3 cột (máy tính bảng), 4 cột (máy tính).
+
+## 12. Hệ thống thiết kế giao diện (Client và Admin)
+
+Sau khi làm xong F04, giao diện được thiết kế lại theo phong cách công nghệ để tăng trải nghiệm và độ tin cậy (đánh giá của nhóm: bản đầu "không gây ấn tượng, chưa đảm bảo UX/UI"). Toàn bộ Client và Admin dùng chung một bộ quy chuẩn đặt trong package `shared` nên hai ứng dụng luôn đồng nhất.
+
+### Token thiết kế (`shared/src/theme.css`, Tailwind v4 `@theme`)
+
+| Nhóm          | Giá trị                                                                                                                    |
+| ------------- | -------------------------------------------------------------------------------------------------------------------------- |
+| Màu chính     | `brand` (chàm/indigo) cho nút, liên kết, trạng thái chọn; `accent` (xanh cyan) cho điểm nhấn                               |
+| Màu nền tối   | `ink` (xanh navy đậm) cho thanh đầu trang, chân trang, thanh bên Admin                                                     |
+| Màu ngữ nghĩa | `rose` cho giá khuyến mãi và lỗi, `emerald` cho còn hàng/thành công                                                        |
+| Chữ           | Tiêu đề: Space Grotesk; nội dung: Inter. Cả hai **tự host** (`@fontsource-variable`, có tập con tiếng Việt), không gọi CDN |
+| Đổ bóng       | `shadow-card`, `shadow-card-hover`, `shadow-glow` (3 mức nổi)                                                              |
+| Chuyển động   | `animate-fade-up`, `animate-fade-in`, `skeleton` (khung chờ lấp lánh), nền lưới `bg-tech-grid`                             |
+
+### Thành phần dùng chung (`@techstore/shared`)
+
+`Button` (primary/secondary/danger/ghost, cỡ sm/md/lg, vòng xoay khi đang xử lý), `FormField`, `SelectField`, `Alert` (có biểu tượng), `Logo`, và bộ biểu tượng SVG tự vẽ `icons.jsx` (không phụ thuộc thư viện ngoài, đều `aria-hidden`).
+
+### Nguyên tắc UX áp dụng
+
+- **Phân cấp thị giác rõ:** thanh đầu trang tối cố định (logo, ô tìm kiếm dạng viên thuốc, tài khoản), thanh danh mục cuộn ngang, nội dung nền sáng. Giá khuyến mãi luôn đỏ đậm, giá gốc gạch ngang, nhãn `-x%` nổi bật.
+- **Trang chủ:** banner slider 3 slide (tự chạy 6 giây, dừng khi rê chuột hoặc đặt focus, **không tự chạy** nếu người dùng bật "giảm chuyển động"), dải cam kết dịch vụ, ô danh mục có biểu tượng, khối khuyến mãi (chỉ hiện khi có sản phẩm giảm giá), sản phẩm mới.
+- **Danh sách:** bộ lọc là các nút bật/tắt (`aria-pressed`) kèm mức giá chọn nhanh và hộp chọn khuyến mãi; các bộ lọc đang áp dụng hiện thành "chip" bấm để bỏ từng cái; trên điện thoại bộ lọc nằm trong ngăn kéo.
+- **Chi tiết:** ảnh phóng to theo vị trí chuột, khối giá nổi kèm số tiền tiết kiệm và cam kết, bảng thông số, sản phẩm liên quan, thanh giá dính ở đáy khi cuộn khuất khối giá. Chỗ đặt nút "Thêm vào giỏ" đã chừa sẵn cho F05.
+- **Trạng thái biên có thiết kế riêng:** khung chờ (skeleton) thay cho chữ "Đang tải...", trạng thái rỗng có biểu tượng và hướng dẫn, lỗi có nút Thử lại.
+- **Admin:** thanh bên tối có biểu tượng và thẻ người dùng, trang tổng quan có thẻ số liệu (sản phẩm, danh mục, thương hiệu), bảng bo tròn không xuống dòng, nút xóa dạng biểu tượng có `aria-label`; trên điện thoại thanh bên là ngăn kéo.
+
+### Khả năng truy cập (accessibility)
+
+- Mọi nút chỉ có biểu tượng đều có `aria-label` (ví dụ "Xóa", "Slide sau", "Đóng bộ lọc"); biểu tượng trang trí ẩn khỏi trình đọc màn hình.
+- Menu thả xuống tài khoản: `aria-haspopup`, `aria-expanded`, đóng bằng Esc hoặc bấm ra ngoài. Ngăn kéo bộ lọc: `role="dialog"` + `aria-modal`, focus vào nút đóng khi mở và trả về nút mở khi đóng, khóa cuộn nền.
+- Slider theo mẫu carousel của WAI-ARIA (`aria-roledescription`, nhãn "n trên 3"); chỉ slide đang hiện nằm trong cây truy cập nên Tab không rơi vào slide ẩn.
+- Mục điều hướng đang xem có `aria-current="page"`; có thể thao tác hoàn toàn bằng bàn phím; hiệu ứng chuyển động tôn trọng `prefers-reduced-motion`.
+
+### Đáp ứng nhiều kích thước màn hình
+
+Thiết kế theo hướng điện thoại trước (mobile-first): lưới sản phẩm 2/3/4 cột, bộ lọc chuyển từ ngăn kéo (dưới 1024px) sang thanh bên, thanh bên Admin chuyển thành ngăn kéo. Đã kiểm tra bằng ảnh chụp ở 1440px và 390px.
+
+### Ảnh sản phẩm mẫu
+
+`backend/prisma/productArt.js` vẽ ảnh SVG minh họa (điện thoại, laptop, máy tính bảng, đồng hồ, tai nghe, sạc dự phòng, cáp) theo thương hiệu và tông màu, ghi vào `backend/uploads/seed/` (thư mục này không đưa lên Git) khi chạy seed. Nhờ vậy dữ liệu mẫu không phụ thuộc dịch vụ ảnh bên ngoài và đẹp hơn ảnh giữ chỗ.
+
+## 13. Trải nghiệm mở rộng F12 (Client và Admin)
+
+Tất cả là xử lý phía trình duyệt, **không đổi API và CSDL**. Dữ liệu người dùng lưu ở localStorage với các khóa có tiền tố `techstore.`: `theme`, `compare`, `recent`.
+
+### Chế độ tối
+
+- **Cách làm:** Tailwind v4 sinh màu từ biến CSS nên khi `<html data-theme="dark">` ta đảo thang màu xám (`--color-slate-*`) và các màu nền nhạt của thương hiệu trong `shared/src/theme.css`. Không phải sửa từng component. Phần còn lại xử lý bằng vài lớp bổ sung: `bg-white` đọc biến `--surface-card`, chữ màu thương hiệu/trạng thái (`text-brand-600`, `text-rose-600`...) đọc biến `--text-*` sáng hơn.
+- **Vùng luôn tối** (`.surface-dark`: đầu trang, chân trang, banner, thanh bên Admin, panel đăng nhập) trả biến về giá trị gốc nên thiết kế dành cho nền tối không bị đảo; `.follow-theme` cho một phần tử bên trong (menu thả xuống tài khoản) theo chế độ hiện tại.
+- **Không chớp nền trắng:** script nhỏ trong `index.html` đặt `data-theme` trước khi React chạy. Thứ tự ưu tiên: lựa chọn đã lưu, cài đặt hệ điều hành (`prefers-color-scheme`), sáng.
+- `shared/src/theme.js` giữ trạng thái bằng `useSyncExternalStore` nên nhiều nút trên cùng trang luôn đồng bộ; localStorage bị chặn thì không lỗi.
+- Quyết định: các lớp `bg-white`, `text-*` bổ sung đặt trong `@layer utilities` (sau Tailwind) để biến thể `hover:` có độ ưu tiên cao hơn vẫn thắng.
+
+### So sánh sản phẩm
+
+| Thành phần                 | Vai trò                                                                                                                                                |
+| -------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------ |
+| `CompareContext`           | Danh sách chọn (tối đa 4, cùng danh mục), lưu localStorage, kiểm tra dữ liệu khi đọc (bỏ phần tử sai dạng), thông báo khi bị từ chối                   |
+| `CompareButton`            | Nút tròn trên thẻ sản phẩm, nút có chữ ở trang chi tiết; `aria-pressed`                                                                                |
+| `CompareBar`               | Thanh cố định ở đáy (cao 4,5rem): ảnh thu nhỏ, bỏ từng cái, xóa tất cả, nút "So sánh (n)" chỉ bấm được khi có từ 2 sản phẩm                            |
+| `ComparePage` (`/so-sanh`) | Tải chi tiết từng sản phẩm bằng `useQueries`, gộp thông số, tô hàng khác nhau, lọc "chỉ khác biệt", nhãn "Giá tốt nhất" theo giá bán hiện hành (BR-02) |
+
+- Chỉ lưu `slug, tên, ảnh, danh mục`; giá và thông số luôn tải mới từ API nên không bao giờ cũ.
+- Sản phẩm 404 hoặc lỗi mạng chỉ làm hỏng cột của nó (có nút bỏ), các cột khác vẫn hiện.
+- Nút so sánh nằm cạnh liên kết của thẻ sản phẩm, không lồng trong `<a>` (HTML không cho phép nút bên trong liên kết).
+- Thanh giá dính ở trang chi tiết và nút "Lên đầu trang" tự nâng lên khi thanh so sánh đang hiện.
+
+### Trang thông tin
+
+`/gioi-thieu`, `/lien-he`, `/cau-hoi-thuong-gap`, `/chinh-sach`, `/chinh-sach/:slug`. Nội dung nằm trong `lib/policies.js` và `lib/storeInfo.js`, dùng chung cho trang, thanh tiện ích và chân trang. Các con số khớp quy tắc nghiệp vụ (BR-05 phí giao, BR-06 hủy đơn, BR-08 COD) và có test kiểm tra. Thông tin liên hệ là **dữ liệu mẫu** (ghi chú ngay trên trang Liên hệ). Câu hỏi thường gặp là bộ phận mở/đóng đạt chuẩn truy cập (`aria-expanded`, `hidden`), tìm không phân biệt dấu.
+
+### Khối trang chủ mới và hiệu ứng
+
+Thương hiệu nổi bật, banner đôi (chỉ hiện nếu danh mục tương ứng tồn tại), dải số liệu đếm thật từ API, "Bạn đã xem" (không lưu giá). `Reveal` (hiện dần khi cuộn) và `CountUp` (số chạy) dùng `IntersectionObserver`; không có IntersectionObserver hoặc người dùng bật "giảm chuyển động" thì hiển thị ngay, nội dung không bao giờ bị ẩn mãi.
+
+### Ảnh sản phẩm thật
+
+Ảnh do quản trị viên tải lên ở Admin hiển thị bằng `object-contain` trên nền trắng (không cắt xén ảnh nhiều tỉ lệ). Ảnh SVG mẫu của seed là hình vuông nên vẫn lấp đầy ô.

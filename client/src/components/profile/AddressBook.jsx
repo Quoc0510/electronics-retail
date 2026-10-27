@@ -62,7 +62,7 @@ function AddressForm({ address, onDone, onCancel }) {
     <form
       onSubmit={form.handleSubmit(validate, submit)}
       aria-label={address ? 'Sửa địa chỉ' : 'Thêm địa chỉ'}
-      className="space-y-4 rounded-md border border-slate-200 bg-white p-4"
+      className="space-y-4 rounded-2xl border border-slate-200 bg-slate-50 p-5"
       noValidate
     >
       {form.serverError && <Alert>{form.serverError}</Alert>}
@@ -126,7 +126,12 @@ export default function AddressBook() {
     if (window.confirm(`Xóa địa chỉ "${address.street}"?`)) remove.mutate(address.id);
   };
 
-  if (isPending) return <p className="text-slate-500">Đang tải địa chỉ...</p>;
+  if (isPending)
+    return (
+      <p role="status" className="text-slate-500">
+        Đang tải địa chỉ...
+      </p>
+    );
   if (isError) return <Alert>{getErrorMessage(error)}</Alert>;
 
   if (editing) {
@@ -146,23 +151,26 @@ export default function AddressBook() {
       {mutationError && <Alert>{getErrorMessage(mutationError)}</Alert>}
 
       {addresses.length === 0 ? (
-        <p className="rounded-md border border-dashed border-slate-300 p-6 text-center text-slate-500">
+        <p className="rounded-2xl border border-dashed border-slate-300 p-8 text-center text-slate-500">
           Bạn chưa có địa chỉ nào. Hãy thêm địa chỉ để đặt hàng nhanh hơn.
         </p>
       ) : (
         <ul className="space-y-3">
           {addresses.map((address) => (
-            <li key={address.id} className="rounded-md border border-slate-200 bg-white p-4">
+            <li
+              key={address.id}
+              className={`rounded-2xl border p-5 transition ${address.isDefault ? 'border-brand-300 bg-brand-50/50' : 'border-slate-200 bg-white hover:border-slate-300'}`}
+            >
               <div className="flex flex-wrap items-center gap-2">
-                <span className="font-medium text-slate-900">{address.recipientName}</span>
+                <span className="font-semibold text-slate-900">{address.recipientName}</span>
                 <span className="text-slate-600">{address.phone}</span>
                 {address.isDefault && (
-                  <span className="rounded bg-blue-100 px-2 py-0.5 text-xs font-medium text-blue-700">
+                  <span className="rounded-full bg-brand-600 px-2.5 py-0.5 text-xs font-semibold text-white">
                     Mặc định
                   </span>
                 )}
               </div>
-              <p className="mt-1 text-sm text-slate-600">
+              <p className="mt-1.5 text-sm text-slate-600">
                 {address.street}, {address.ward}, {address.district}, {address.province}
               </p>
               <div className="mt-3 flex flex-wrap gap-2">

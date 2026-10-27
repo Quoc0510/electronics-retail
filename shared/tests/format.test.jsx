@@ -4,7 +4,7 @@
 import { describe, expect, it } from 'vitest';
 import { render, screen } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
-import { SelectField, formatVnd, resolveAssetUrl } from '../src/index.js';
+import { SelectField, discountPercent, formatVnd, resolveAssetUrl } from '../src/index.js';
 
 describe('formatVnd', () => {
   it.each([
@@ -13,6 +13,19 @@ describe('formatVnd', () => {
     [0, '0 ₫'],
   ])('formatVnd(%i) = %s', (amount, expected) => {
     expect(formatVnd(amount)).toBe(expected);
+  });
+});
+
+describe('discountPercent', () => {
+  it.each([
+    [20000000, 18000000, 10],
+    [1000000, 999000, 0], // giảm 0,1% làm tròn về 0
+    [1000000, 500000, 50],
+    [1000000, null, 0],
+    [1000000, 1000000, 0], // không giảm
+    [1000000, 1200000, 0], // dữ liệu sai (giá khuyến mãi cao hơn) không hiện số âm
+  ])('discountPercent(%i, %s) = %i', (price, sale, expected) => {
+    expect(discountPercent(price, sale)).toBe(expected);
   });
 });
 

@@ -1,5 +1,5 @@
 /**
- * @feature [F03] Ô chọn trong danh sách thả xuống, có nhãn và thông báo lỗi (giống FormField).
+ * @feature [F03][F04] Ô chọn trong danh sách thả xuống, có nhãn và thông báo lỗi (giống FormField).
  * options: [{ value, label }]. placeholder là lựa chọn đầu tiên mang giá trị rỗng (ví dụ "Chọn danh mục").
  */
 import { useId } from 'react';
@@ -10,7 +10,7 @@ export default function SelectField({ label, error, id, options, placeholder, ..
   const errorId = `${selectId}-error`;
 
   return (
-    <div className="space-y-1">
+    <div className="space-y-1.5">
       <label htmlFor={selectId} className="block text-sm font-medium text-slate-700">
         {label}
       </label>
@@ -18,10 +18,10 @@ export default function SelectField({ label, error, id, options, placeholder, ..
         id={selectId}
         aria-invalid={Boolean(error)}
         aria-describedby={error ? errorId : undefined}
-        className={`w-full rounded-md border bg-white px-3 py-2 text-slate-900 shadow-sm focus:outline-none focus:ring-2 ${
+        className={`w-full rounded-xl border bg-white px-3.5 py-2.5 text-slate-900 shadow-sm transition focus:outline-none focus:ring-4 ${
           error
-            ? 'border-red-500 focus:ring-red-300'
-            : 'border-slate-300 focus:border-blue-500 focus:ring-blue-200'
+            ? 'border-rose-500 focus:ring-rose-100'
+            : 'border-slate-300 hover:border-slate-400 focus:border-brand-500 focus:ring-brand-100'
         }`}
         {...selectProps}
       >
@@ -33,7 +33,7 @@ export default function SelectField({ label, error, id, options, placeholder, ..
         ))}
       </select>
       {error && (
-        <p id={errorId} className="text-sm text-red-600">
+        <p id={errorId} className="text-sm text-rose-600">
           {error}
         </p>
       )}

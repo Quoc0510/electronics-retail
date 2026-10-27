@@ -24,6 +24,12 @@ export const session = { user: customer, accessToken: 'access-1', refreshToken: 
 
 export const mockServer = (handlers) => mockServerFor(api, handlers);
 
+// [F04] Trang chủ gọi danh mục và danh sách sản phẩm; các test không quan tâm tới trang chủ dùng bộ trả lời rỗng này
+export const storefrontApi = {
+  'GET /categories': [200, []],
+  'GET /products': [200, { items: [], page: 1, pageSize: 12, total: 0 }],
+};
+
 export const renderApp = (route = '/') =>
   render(
     <QueryClientProvider

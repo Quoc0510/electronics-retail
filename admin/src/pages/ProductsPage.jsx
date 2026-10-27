@@ -4,14 +4,23 @@
 import { useEffect, useState } from 'react';
 import { Link } from 'react-router-dom';
 import { keepPreviousData, useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
-import { Alert, Button, formatVnd, getErrorMessage } from '@techstore/shared';
+import {
+  Alert,
+  Button,
+  IconEdit,
+  IconPlus,
+  IconTrash,
+  formatVnd,
+  getErrorMessage,
+} from '@techstore/shared';
 import { api, assetUrl } from '../lib/api.js';
+import PageHeader from '../components/PageHeader.jsx';
 
 const PAGE_SIZE = 10;
 const LOW_STOCK = 5; // Cùng ngưỡng cảnh báo tồn kho thấp của dashboard (US-26)
 
 const selectClass =
-  'rounded-md border border-slate-300 bg-white px-3 py-2 text-sm shadow-sm focus:border-blue-500 focus:outline-none focus:ring-2 focus:ring-blue-200';
+  'rounded-xl border border-slate-300 bg-white px-3.5 py-2.5 text-sm shadow-sm transition focus:border-brand-500 focus:outline-none focus:ring-4 focus:ring-brand-100';
 
 export default function ProductsPage() {
   const queryClient = useQueryClient();
@@ -78,15 +87,15 @@ export default function ProductsPage() {
 
   return (
     <div className="space-y-4">
-      <div className="flex flex-wrap items-center justify-between gap-3">
-        <h1 className="text-2xl font-bold text-slate-900">Sản phẩm</h1>
+      <PageHeader title="Sản phẩm" description="Quản lý hàng hóa, giá, tồn kho và ảnh">
         <Link
           to="/san-pham/them"
-          className="inline-flex items-center rounded-md bg-blue-600 px-4 py-2 text-sm font-medium text-white hover:bg-blue-700"
+          className="inline-flex items-center gap-2 rounded-xl bg-gradient-to-r from-brand-600 to-violet-600 px-4 py-2 text-sm font-semibold text-white shadow-sm transition hover:shadow-glow hover:brightness-110"
         >
+          <IconPlus size={16} />
           Thêm sản phẩm
         </Link>
-      </div>
+      </PageHeader>
 
       <div className="flex flex-wrap gap-3">
         <input
@@ -123,11 +132,15 @@ export default function ProductsPage() {
       </div>
 
       {actionError && <Alert>{getErrorMessage(actionError)}</Alert>}
-      {isPending && <p className="text-slate-500">Đang tải...</p>}
+      {isPending && (
+        <p role="status" className="text-slate-500">
+          Đang tải...
+        </p>
+      )}
       {isError && <Alert>{getErrorMessage(error)}</Alert>}
 
       {data && data.items.length === 0 && (
-        <p className="rounded-md border border-dashed border-slate-300 bg-white p-8 text-center text-slate-500">
+        <p className="rounded-2xl border border-dashed border-slate-300 bg-white p-10 text-center text-slate-500">
           {hasFilter
             ? 'Không có sản phẩm nào khớp bộ lọc.'
             : 'Chưa có sản phẩm nào. Bấm "Thêm sản phẩm" để tạo mới.'}
@@ -136,21 +149,21 @@ export default function ProductsPage() {
 
       {data && data.items.length > 0 && (
         <>
-          <div className="overflow-x-auto rounded-lg bg-white shadow">
+          <div className="overflow-x-auto rounded-2xl border border-slate-200 bg-white shadow-card">
             <table className="min-w-full text-left text-sm">
-              <thead className="border-b border-slate-200 bg-slate-50 text-slate-600">
+              <thead className="border-b border-slate-200 bg-slate-50 text-xs uppercase tracking-wider text-slate-500">
                 <tr>
-                  <th className="px-4 py-3 font-medium">Ảnh</th>
-                  <th className="px-4 py-3 font-medium">Sản phẩm</th>
-                  <th className="px-4 py-3 font-medium">Danh mục</th>
-                  <th className="px-4 py-3 font-medium">Thương hiệu</th>
-                  <th className="px-4 py-3 font-medium">Giá</th>
-                  <th className="px-4 py-3 font-medium">Tồn kho</th>
-                  <th className="px-4 py-3 font-medium">Trạng thái</th>
-                  <th className="px-4 py-3 font-medium">Thao tác</th>
+                  <th className="whitespace-nowrap px-4 py-3 font-medium">Ảnh</th>
+                  <th className="whitespace-nowrap px-4 py-3 font-medium">Sản phẩm</th>
+                  <th className="whitespace-nowrap px-4 py-3 font-medium">Danh mục</th>
+                  <th className="whitespace-nowrap px-4 py-3 font-medium">Thương hiệu</th>
+                  <th className="whitespace-nowrap px-4 py-3 font-medium">Giá</th>
+                  <th className="whitespace-nowrap px-4 py-3 font-medium">Tồn kho</th>
+                  <th className="whitespace-nowrap px-4 py-3 font-medium">Trạng thái</th>
+                  <th className="whitespace-nowrap px-4 py-3 font-medium">Thao tác</th>
                 </tr>
               </thead>
-              <tbody className="divide-y divide-slate-100">
+              <tbody className="divide-y divide-slate-100 [&>tr]:transition [&>tr:hover]:bg-brand-50/40">
                 {data.items.map((product) => (
                   <tr key={product.id}>
                     <td className="px-4 py-3">
@@ -158,10 +171,10 @@ export default function ProductsPage() {
                         <img
                           src={assetUrl(product.thumbnail)}
                           alt={product.name}
-                          className="h-12 w-12 rounded object-cover"
+                          className="h-12 w-12 rounded-xl object-cover"
                         />
                       ) : (
-                        <div className="flex h-12 w-12 items-center justify-center rounded bg-slate-100 text-xs text-slate-400">
+                        <div className="flex h-12 w-12 items-center justify-center rounded-xl bg-slate-100 text-xs text-slate-400">
                           Chưa có
                         </div>
                       )}
@@ -175,7 +188,7 @@ export default function ProductsPage() {
                     <td className="px-4 py-3">
                       {product.salePrice ? (
                         <>
-                          <div className="font-medium text-red-600">
+                          <div className="font-medium text-rose-600">
                             {formatVnd(product.salePrice)}
                           </div>
                           <div className="text-xs text-slate-400 line-through">
@@ -188,16 +201,16 @@ export default function ProductsPage() {
                     </td>
                     <td
                       className={`px-4 py-3 ${
-                        product.stock <= LOW_STOCK ? 'font-medium text-red-600' : 'text-slate-600'
+                        product.stock <= LOW_STOCK ? 'font-medium text-rose-600' : 'text-slate-600'
                       }`}
                     >
                       {product.stock}
                     </td>
                     <td className="px-4 py-3">
                       <span
-                        className={`rounded px-2 py-0.5 text-xs font-medium ${
+                        className={`rounded-full px-2.5 py-0.5 text-xs font-semibold ${
                           product.isActive
-                            ? 'bg-green-100 text-green-700'
+                            ? 'bg-emerald-100 text-emerald-700'
                             : 'bg-slate-200 text-slate-600'
                         }`}
                       >
@@ -205,19 +218,30 @@ export default function ProductsPage() {
                       </span>
                     </td>
                     <td className="px-4 py-3">
-                      <div className="flex flex-wrap gap-2">
+                      <div className="flex flex-nowrap items-center gap-1.5">
                         <Link
                           to={`/san-pham/${product.id}`}
                           aria-label={`Sửa ${product.name}`}
-                          className="inline-flex items-center rounded-md border border-slate-300 px-4 py-2 text-sm font-medium text-slate-700 hover:bg-slate-50"
+                          className="inline-flex items-center gap-1.5 rounded-xl border border-slate-300 bg-white px-3 py-1.5 text-xs font-semibold text-slate-700 transition hover:border-brand-300 hover:bg-brand-50 hover:text-brand-700"
                         >
+                          <IconEdit size={14} />
                           Sửa
                         </Link>
-                        <Button variant="secondary" onClick={() => toggleActive.mutate(product)}>
+                        <Button
+                          variant="ghost"
+                          size="sm"
+                          onClick={() => toggleActive.mutate(product)}
+                        >
                           {product.isActive ? 'Ẩn' : 'Hiện'}
                         </Button>
-                        <Button variant="danger" onClick={() => handleDelete(product)}>
-                          Xóa
+                        <Button
+                          variant="danger"
+                          size="sm"
+                          aria-label="Xóa"
+                          title="Xóa sản phẩm"
+                          onClick={() => handleDelete(product)}
+                        >
+                          <IconTrash size={14} />
                         </Button>
                       </div>
                     </td>
@@ -235,11 +259,17 @@ export default function ProductsPage() {
               Tổng {data.total} sản phẩm · Trang {data.page}/{totalPages}
             </span>
             <div className="flex gap-2">
-              <Button variant="secondary" disabled={page <= 1} onClick={() => setPage(page - 1)}>
+              <Button
+                variant="secondary"
+                size="sm"
+                disabled={page <= 1}
+                onClick={() => setPage(page - 1)}
+              >
                 Trang trước
               </Button>
               <Button
                 variant="secondary"
+                size="sm"
                 disabled={page >= totalPages}
                 onClick={() => setPage(page + 1)}
               >

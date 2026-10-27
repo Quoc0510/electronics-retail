@@ -5,10 +5,14 @@
 import { StrictMode } from 'react';
 import { createRoot } from 'react-dom/client';
 import { BrowserRouter } from 'react-router-dom';
+import { initTheme } from '@techstore/shared';
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import App from './App.jsx';
 import { AuthProvider } from './context/AuthContext.jsx';
 import './index.css';
+
+// [F12] Phòng khi script trong index.html không chạy: vẫn có data-theme cho CSS chế độ tối
+initTheme();
 
 const queryClient = new QueryClient({
   // Không tự gọi lại khi đổi tab trình duyệt, tránh request thừa

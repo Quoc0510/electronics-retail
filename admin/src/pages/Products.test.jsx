@@ -118,7 +118,7 @@ describe('Danh sách sản phẩm (US-09)', () => {
   it('tồn kho thấp (từ 5 trở xuống) được tô đỏ', async () => {
     await openList({ items: [listItem({ stock: 3 })] });
 
-    expect(screen.getByText('3')).toHaveClass('text-red-600');
+    expect(screen.getByText('3')).toHaveClass('text-rose-600');
   });
 
   it('chưa có dữ liệu thì gợi ý thêm mới', async () => {

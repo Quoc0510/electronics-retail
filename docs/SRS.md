@@ -114,6 +114,17 @@ Mức ưu tiên theo MoSCoW: **M** (Must), **S** (Should), **C** (Could).
 | US-26 | Là quản trị viên, tôi muốn xem thống kê kinh doanh                  | M       | AC1: doanh thu theo ngày trong 30 ngày gần nhất (chỉ tính đơn COMPLETED). AC2: số đơn theo từng trạng thái. AC3: 5 sản phẩm bán chạy nhất. AC4: danh sách sản phẩm tồn kho ≤ 5. |
 | US-27 | Là quản trị viên, tôi muốn xem danh sách người dùng và khóa/mở khóa | M       | AC1: danh sách có tìm theo email, phân trang. AC2: khóa tài khoản thì thu hồi toàn bộ phiên đăng nhập. AC3: không được tự khóa chính mình.                                      |
 
+### F12 - Trải nghiệm mở rộng và trang thông tin (Could)
+
+Nhóm tính năng làm website đầy đặn hơn một cửa hàng "chỉ bán hàng". Không cần bảng dữ liệu mới: các tùy chọn của người dùng (chế độ giao diện, danh sách so sánh, sản phẩm đã xem) lưu trên trình duyệt (localStorage).
+
+| ID    | User story                                                                         | Ưu tiên | Acceptance criteria                                                                                                                                                                                                                                                                                                                                                                                  |
+| ----- | ---------------------------------------------------------------------------------- | ------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| US-28 | Là khách, tôi muốn so sánh các sản phẩm cùng loại để chọn được món phù hợp         | C       | AC1: thêm/bỏ sản phẩm vào so sánh từ thẻ sản phẩm và trang chi tiết. AC2: tối đa 4 sản phẩm và phải cùng danh mục, vi phạm thì báo rõ lý do. AC3: bảng so sánh giá, tình trạng, thương hiệu, thông số cạnh nhau; hàng khác biệt được tô nổi, có chế độ chỉ hiện điểm khác biệt, gắn nhãn "Giá tốt nhất". AC4: danh sách giữ nguyên khi tải lại trang; sản phẩm không còn bán chỉ làm lỗi cột của nó. |
+| US-29 | Là người dùng, tôi muốn dùng giao diện tối khi làm việc ban đêm hoặc theo sở thích | C       | AC1: nút đổi sáng/tối ở Client và Admin. AC2: mặc định theo cài đặt hệ điều hành, lựa chọn của người dùng được nhớ. AC3: không bị chớp nền trắng khi tải lại trang ở chế độ tối. AC4: chữ vẫn đạt độ tương phản AA ở cả hai chế độ.                                                                                                                                                                  |
+| US-30 | Là khách, tôi muốn đọc thông tin về cửa hàng, chính sách và câu hỏi thường gặp     | C       | AC1: có trang Giới thiệu, Liên hệ, Câu hỏi thường gặp và các chính sách (vận chuyển, bảo hành, đổi trả, thanh toán, bảo mật). AC2: nội dung chính sách khớp quy tắc nghiệp vụ (BR-05, BR-06, BR-08). AC3: câu hỏi thường gặp tìm được không phân biệt dấu. AC4: các trang truy cập được từ thanh đầu trang và chân trang.                                                                            |
+| US-31 | Là khách, tôi muốn xem lại nhanh các sản phẩm vừa xem                              | C       | AC1: trang chủ có khối "Bạn đã xem" (tối đa 8 sản phẩm, mới nhất trước), chỉ hiện khi có lịch sử. AC2: không lưu giá để không hiện giá cũ. AC3: có nút xóa lịch sử.                                                                                                                                                                                                                                  |
+
 ## 3. Quy tắc nghiệp vụ (Business rules)
 
 | ID    | Quy tắc                                                                                                                                                                                                                        |
@@ -175,3 +186,4 @@ Ngưỡng có thể điều chỉnh cùng giảng viên hướng dẫn trước 
 | F08       | US-21 → US-23 | Review, Wishlist (thêm khi làm F08)       |
 | F09       | US-24, US-25  | Coupon (thêm khi làm F09)                 |
 | F10       | US-26, US-27  | User, Order, OrderItem, Product           |
+| F12       | US-28 → US-31 | Không có (lưu trên trình duyệt)           |

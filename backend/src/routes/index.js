@@ -8,6 +8,7 @@ import authRoutes from './auth.routes.js'; // [F01]
 import userRoutes from './user.routes.js'; // [F01]
 import adminRoutes from './admin.routes.js'; // [F01]
 import { publicCatalogRouter } from './catalog.routes.js'; // [F02]
+import storefrontRoutes from './storefront.routes.js'; // [F04]
 
 const router = Router();
 
@@ -16,5 +17,6 @@ router.use('/auth', authRoutes);
 router.use('/users', userRoutes);
 router.use('/admin', adminRoutes);
 router.use(publicCatalogRouter); // [F02] GET /api/categories, /api/brands
+router.use('/products', storefrontRoutes); // [F04] GET /api/products, /api/products/:slug
 
 export default router;

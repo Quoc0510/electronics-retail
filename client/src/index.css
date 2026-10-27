@@ -1,4 +1,8 @@
-/* @feature [F00] Nền tảng - Nạp Tailwind CSS (phiên bản 4) */
+/* @feature [F00][F04] Nạp Tailwind CSS (phiên bản 4), font tự lưu trong dự án và hệ thống thiết kế dùng chung */
 @import 'tailwindcss';
-/* Quét thêm class Tailwind trong package dùng chung (nằm ngoài thư mục client) */
+@import '@fontsource-variable/inter/index.css';
+@import '@fontsource-variable/space-grotesk/index.css';
+@import '../../shared/src/theme.css';
+
+/* Quét thêm class Tailwind trong package dùng chung (nằm ngoài thư mục ứng dụng) */
 @source '../../shared/src';
