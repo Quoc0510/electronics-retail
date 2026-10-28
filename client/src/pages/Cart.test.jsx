@@ -499,11 +499,12 @@ describe('Trang giỏ hàng', () => {
       expect(within(summary()).getAllByText('5.000.000 ₫').length).toBeGreaterThan(0);
     });
 
-    it('nút Đặt hàng bị khóa cho tới khi có F06', async () => {
+    it('nút "Tiến hành đặt hàng" dẫn tới /dat-hang khi mọi dòng mua được, bị khóa khi có dòng cần xử lý', async () => {
       await openCart([line(1)]);
-
-      expect(within(summary()).getByRole('button', { name: 'Đặt hàng' })).toBeDisabled();
-      expect(within(summary()).getByText(/sắp ra mắt/)).toBeInTheDocument();
+      expect(within(summary()).getByRole('link', { name: 'Tiến hành đặt hàng' })).toHaveAttribute(
+        'href',
+        '/dat-hang',
+      );
     });
   });
 

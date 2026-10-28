@@ -10,6 +10,7 @@ import adminRoutes from './admin.routes.js'; // [F01]
 import { publicCatalogRouter } from './catalog.routes.js'; // [F02]
 import storefrontRoutes from './storefront.routes.js'; // [F04]
 import cartRoutes from './cart.routes.js'; // [F05]
+import orderRoutes from './order.routes.js'; // [F06]
 
 const router = Router();
 
@@ -20,5 +21,6 @@ router.use('/admin', adminRoutes);
 router.use(publicCatalogRouter); // [F02] GET /api/categories, /api/brands
 router.use('/products', storefrontRoutes); // [F04] GET /api/products, /api/products/:slug
 router.use('/cart', cartRoutes); // [F05] giỏ hàng (cần đăng nhập)
+router.use('/orders', orderRoutes); // [F06] đặt hàng và xem đơn của mình (cần đăng nhập)
 
 export default router;

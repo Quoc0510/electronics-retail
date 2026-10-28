@@ -12,6 +12,7 @@ import {
   EMPTY_GUEST_ITEMS,
   clearGuestItems,
   getGuestItems,
+  setMerging,
   subscribeGuestCart,
 } from '../../lib/guestCart.js';
 import { useAuth } from '../../context/AuthContext.jsx';
@@ -30,6 +31,7 @@ export default function CartSync() {
   useEffect(() => {
     if (!user || guestItems.length === 0 || merging.current) return;
     merging.current = true;
+    setMerging(true);
 
     api
       .post('/cart/merge', { items: guestItems })
@@ -46,6 +48,7 @@ export default function CartSync() {
       })
       .finally(() => {
         merging.current = false;
+        setMerging(false);
       });
   }, [user, guestItems, queryClient]);
 

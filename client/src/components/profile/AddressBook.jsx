@@ -3,42 +3,9 @@
  */
 import { useState } from 'react';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
-import {
-  Alert,
-  Button,
-  FormField,
-  getErrorMessage,
-  isValidPhone,
-  useFormState,
-} from '@techstore/shared';
+import { Alert, Button, FormField, getErrorMessage, useFormState } from '@techstore/shared';
 import { api } from '../../lib/api.js';
-
-const EMPTY_ADDRESS = {
-  recipientName: '',
-  phone: '',
-  province: '',
-  district: '',
-  ward: '',
-  street: '',
-  isDefault: false,
-};
-
-const REQUIRED_FIELDS = {
-  recipientName: 'Vui lòng nhập tên người nhận',
-  province: 'Vui lòng nhập tỉnh/thành phố',
-  district: 'Vui lòng nhập quận/huyện',
-  ward: 'Vui lòng nhập phường/xã',
-  street: 'Vui lòng nhập số nhà, tên đường',
-};
-
-const validate = (values) => {
-  const errors = {};
-  Object.entries(REQUIRED_FIELDS).forEach(([field, message]) => {
-    if (!values[field].trim()) errors[field] = message;
-  });
-  if (!isValidPhone(values.phone)) errors.phone = 'Số điện thoại phải gồm 10 số và bắt đầu bằng 0';
-  return errors;
-};
+import { EMPTY_ADDRESS, validateAddress as validate } from '../../lib/addressValidation.js';
 
 // Form thêm hoặc sửa một địa chỉ. address = null nghĩa là thêm mới
 function AddressForm({ address, onDone, onCancel }) {
