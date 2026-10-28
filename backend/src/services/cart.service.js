@@ -78,12 +78,30 @@ const buildCartView = (rawItems) => {
   };
 };
 
+/**
+ * Giỏ của người dùng, tạo nếu chưa có (BR-11: đúng một giỏ cho mỗi người dùng).
+ * KHÔNG dùng prisma.cart.upsert: khi nhiều request cùng lúc tạo giỏ lần đầu (ví dụ bấm đúp "Thêm vào giỏ" của người mới),
+ * upsert của Prisma không nguyên tử và ném lỗi trùng khóa P2002 thành lỗi 500. Ở đây request thua cuộc đua (P2002) chỉ cần
+ * đọc lại giỏ mà request thắng vừa tạo.
+ */
+const ensureCart = async (userId, db = prisma) => {
+  const existing = await db.cart.findUnique({ where: { userId } });
+  if (existing) return existing;
+  try {
+    return await db.cart.create({ data: { userId } });
+  } catch (error) {
+    if (error instanceof Prisma.PrismaClientKnownRequestError && error.code === 'P2002') {
+      return db.cart.findUniqueOrThrow({ where: { userId } });
+    }
+    throw error;
+  }
+};
+
 /** Giỏ của người dùng (tạo nếu chưa có) cùng thông tin sản phẩm, dạng sẵn sàng trả cho client. */
 export const getCart = async (userId, db = prisma) => {
-  const cart = await db.cart.upsert({
-    where: { userId },
-    update: {},
-    create: { userId },
+  const { id } = await ensureCart(userId, db);
+  const cart = await db.cart.findUniqueOrThrow({
+    where: { id },
     include: {
       items: { orderBy: { id: 'asc' }, include: { product: { include: productInclude } } },
     },
@@ -193,7 +211,7 @@ const applyAdd = async (cart, product, quantity) => {
 /** Thêm sản phẩm vào giỏ, cộng dồn nếu đã có. */
 export const addItem = async (userId, { productId, quantity }) => {
   const product = await findVisibleProduct(productId);
-  const cart = await prisma.cart.upsert({ where: { userId }, update: {}, create: { userId } });
+  const cart = await ensureCart(userId);
   await applyAdd(cart, product, quantity);
   return getCart(userId);
 };
@@ -205,7 +223,7 @@ export const addItem = async (userId, { productId, quantity }) => {
  * @returns {{ cart: object, notes: string[] }}
  */
 export const mergeCart = async (userId, requested) => {
-  const cart = await prisma.cart.upsert({ where: { userId }, update: {}, create: { userId } });
+  const cart = await ensureCart(userId);
   const notes = [];
   let unavailable = 0;
 

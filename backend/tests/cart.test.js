@@ -765,3 +765,45 @@ describe('Gộp giỏ của khách vào tài khoản (POST /api/cart/merge)', ()
     expect(item.quantity).toBeLessThanOrEqual(3);
   });
 });
+
+// ---------------------------------------------------------------------------
+// Hồi quy: nhiều request cùng lúc tạo giỏ lần đầu (prisma.cart.upsert từng ném P2002 thành lỗi 500, CI phát hiện)
+// ---------------------------------------------------------------------------
+describe('Tạo giỏ lần đầu khi nhiều request cùng lúc', () => {
+  it('nhiều lần xem giỏ cùng lúc của người mới đều thành công và chỉ tạo đúng một giỏ', async () => {
+    const { token } = await signIn();
+
+    const results = await Promise.all(Array.from({ length: 8 }, () => getCart(token)));
+
+    expect(results.map((res) => res.status)).toEqual(Array(8).fill(200));
+    expect(await prisma.cart.count()).toBe(1);
+  });
+
+  it('nhiều lần thêm sản phẩm cùng lúc của người mới: không lỗi 500, số lượng cộng đúng', async () => {
+    const { token } = await signIn();
+    const product = await makeProduct({ stock: 20 });
+
+    const results = await Promise.all(
+      Array.from({ length: 8 }, () => addItem(token, { productId: product.id, quantity: 1 })),
+    );
+
+    expect(results.map((res) => res.status)).toEqual(Array(8).fill(200));
+    expect(await prisma.cart.count()).toBe(1);
+    expect((await prisma.cartItem.findFirst()).quantity).toBe(8);
+  });
+
+  it('gộp giỏ của khách đồng thời với việc thêm sản phẩm: không lỗi 500', async () => {
+    const { token } = await signIn();
+    const product = await makeProduct({ stock: 20 });
+
+    const results = await Promise.all([
+      merge(token, [{ productId: product.id, quantity: 2 }]),
+      addItem(token, { productId: product.id, quantity: 1 }),
+      getCart(token),
+    ]);
+
+    expect(results.map((res) => res.status)).toEqual([200, 200, 200]);
+    expect(await prisma.cart.count()).toBe(1);
+    expect((await prisma.cartItem.findFirst()).quantity).toBe(3);
+  });
+});
