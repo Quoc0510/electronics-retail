@@ -30,6 +30,8 @@ export default function App() {
           <Route path="/san-pham" element={<ProductListPage />} />
           <Route path="/san-pham/:slug" element={<ProductDetailPage />} />
           <Route path="/so-sanh" element={<ComparePage />} /> {/* [F12] */}
+          {/* [F05] Giỏ hàng xem được khi chưa đăng nhập (giỏ lưu trên trình duyệt); đặt hàng (F06) mới yêu cầu đăng nhập */}
+          <Route path="/gio-hang" element={<CartPage />} />
           {/* [F12] Trang thông tin */}
           <Route path="/gioi-thieu" element={<AboutPage />} />
           <Route path="/lien-he" element={<ContactPage />} />
@@ -41,7 +43,6 @@ export default function App() {
           {/* Các trang dưới đây yêu cầu đăng nhập */}
           <Route element={<ProtectedRoute />}>
             <Route path="/tai-khoan" element={<ProfilePage />} />
-            <Route path="/gio-hang" element={<CartPage />} /> {/* [F05] */}
           </Route>
           <Route path="*" element={<NotFoundPage />} />
         </Route>

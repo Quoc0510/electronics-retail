@@ -1,12 +1,11 @@
 /**
  * @feature [F05] Giỏ hàng - Nút "Thêm vào giỏ" dùng ở thẻ sản phẩm (variant "icon"), trang chi tiết và thanh giá dính ("full").
- *  - Chưa đăng nhập: chuyển tới trang đăng nhập và quay lại trang đang xem sau khi đăng nhập (US-14 AC1, BR-11).
+ *  - Chưa đăng nhập vẫn thêm được: giỏ lưu trên trình duyệt và được gộp vào tài khoản khi đăng nhập (xem useCart, CartSync).
  *  - Hết hàng: nút bị khóa và ghi rõ "Hết hàng".
  *  - Thành công: nút đổi thành "Đã thêm" trong 2 giây, biểu tượng giỏ trên đầu trang cập nhật số lượng (AC4).
  *  - Vượt tồn kho hoặc lỗi khác: hiện đúng thông báo của máy chủ, ví dụ "Chỉ còn 3 sản phẩm trong kho" (AC3).
  */
 import { useEffect, useRef, useState } from 'react';
-import { useLocation, useNavigate } from 'react-router-dom';
 import { IconBag, IconCheck, getErrorMessage } from '@techstore/shared';
 import { useCart } from '../../hooks/useCart.js';
 
@@ -19,9 +18,7 @@ export default function AddToCartButton({
   variant = 'full',
   className = '',
 }) {
-  const { isLoggedIn, addItem } = useCart();
-  const navigate = useNavigate();
-  const location = useLocation();
+  const { addItem } = useCart();
   const [added, setAdded] = useState(false);
   const [error, setError] = useState('');
   const timer = useRef(null);
@@ -39,11 +36,6 @@ export default function AddToCartButton({
   };
 
   const handleClick = () => {
-    if (!isLoggedIn) {
-      // Đăng nhập xong ProtectedRoute/LoginPage đưa người dùng về đúng trang này
-      navigate('/dang-nhap', { state: { from: location } });
-      return;
-    }
     setError('');
     addItem.mutate(
       { productId: product.id, quantity },

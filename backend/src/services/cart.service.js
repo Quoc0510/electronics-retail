@@ -4,6 +4,8 @@
  *  - Thêm sản phẩm đã có thì cộng dồn số lượng; không bao giờ vượt tồn kho (BR-03) và báo rõ số còn lại.
  *  - Chỉ thêm được sản phẩm khách đang thấy được (sản phẩm, danh mục, thương hiệu đều đang hiện).
  *  - Mọi thao tác trả về toàn bộ giỏ đã tính lại để giao diện cập nhật ngay (tổng tiền, số lượng).
+ *  - Khách chưa đăng nhập giữ giỏ trên trình duyệt: previewCart tính giá/tồn kho cho giỏ đó (không ghi CSDL) và
+ *    mergeCart gộp giỏ đó vào giỏ tài khoản khi đăng nhập (BR-11 điều chỉnh: xem SRS).
  *
  * Giỏ hàng KHÔNG giữ chỗ tồn kho: tồn kho có thể thay đổi sau khi thêm, nên mỗi dòng có trạng thái
  * (OK, UNAVAILABLE, OUT_OF_STOCK, EXCEEDS_STOCK) và việc kiểm tra bắt buộc cuối cùng nằm ở lúc đặt hàng (F06).
@@ -11,6 +13,7 @@
 import { Prisma } from '@prisma/client';
 import { prisma } from '../lib/prisma.js';
 import { AppError } from '../utils/AppError.js';
+import { MAX_LINE_QUANTITY } from '../validators/cart.validator.js';
 
 export const LINE_STATUS = {
   OK: 'OK',
@@ -35,18 +38,12 @@ const lineStatus = (item) => {
   return LINE_STATUS.OK;
 };
 
-/** Giỏ của người dùng (tạo nếu chưa có) cùng thông tin sản phẩm, dạng sẵn sàng trả cho client. */
-export const getCart = async (userId, db = prisma) => {
-  const cart = await db.cart.upsert({
-    where: { userId },
-    update: {},
-    create: { userId },
-    include: {
-      items: { orderBy: { id: 'asc' }, include: { product: { include: productInclude } } },
-    },
-  });
-
-  const items = cart.items.map((item) => {
+/**
+ * Dựng dạng giỏ trả cho client từ các dòng thô { id, quantity, product } (product kèm danh mục, thương hiệu, ảnh).
+ * Dùng chung cho giỏ trong CSDL (id là id dòng giỏ) và giỏ xem trước của khách chưa đăng nhập (id là id sản phẩm).
+ */
+const buildCartView = (rawItems) => {
+  const items = rawItems.map((item) => {
     const { product } = item;
     const unitPrice = product.salePrice ?? product.price; // BR-02
     return {
@@ -81,6 +78,42 @@ export const getCart = async (userId, db = prisma) => {
   };
 };
 
+/** Giỏ của người dùng (tạo nếu chưa có) cùng thông tin sản phẩm, dạng sẵn sàng trả cho client. */
+export const getCart = async (userId, db = prisma) => {
+  const cart = await db.cart.upsert({
+    where: { userId },
+    update: {},
+    create: { userId },
+    include: {
+      items: { orderBy: { id: 'asc' }, include: { product: { include: productInclude } } },
+    },
+  });
+  return buildCartView(cart.items);
+};
+
+/**
+ * Giỏ xem trước cho khách CHƯA đăng nhập: client gửi danh sách { productId, quantity } đang lưu trên trình duyệt,
+ * server trả giỏ với giá, tồn kho và trạng thái hiện tại. Không ghi gì vào CSDL.
+ * Sản phẩm không tồn tại bị bỏ qua (client tự dọn khỏi bộ nhớ); trùng sản phẩm thì cộng số lượng; id dòng = id sản phẩm.
+ */
+export const previewCart = async (requested) => {
+  const merged = mergeDuplicates(requested);
+  const products = await prisma.product.findMany({
+    where: { id: { in: merged.map((entry) => entry.productId) } },
+    include: productInclude,
+  });
+  const byId = new Map(products.map((product) => [product.id, product]));
+
+  const rawItems = merged
+    .filter((entry) => byId.has(entry.productId))
+    .map((entry) => ({
+      id: entry.productId,
+      quantity: entry.quantity,
+      product: byId.get(entry.productId),
+    }));
+  return buildCartView(rawItems);
+};
+
 // Thông báo vượt tồn kho nói rõ số còn lại và số đã có trong giỏ (US-14 AC3)
 const insufficientStock = (stock, inCart) => {
   if (stock <= 0) return new AppError(409, 'Sản phẩm đã hết hàng', 'OUT_OF_STOCK');
@@ -103,15 +136,23 @@ const findVisibleProduct = async (productId) => {
   return product;
 };
 
+// Gộp các mục trùng sản phẩm (cộng số lượng, tối đa MAX_LINE_QUANTITY) và giữ nguyên thứ tự xuất hiện đầu tiên
+const mergeDuplicates = (entries) => {
+  const totals = new Map();
+  for (const { productId, quantity } of entries) {
+    totals.set(productId, Math.min((totals.get(productId) ?? 0) + quantity, MAX_LINE_QUANTITY));
+  }
+  return [...totals].map(([productId, quantity]) => ({ productId, quantity }));
+};
+
 /**
- * Thêm sản phẩm vào giỏ, cộng dồn nếu đã có.
+ * Cộng `quantity` vào dòng của sản phẩm trong giỏ (tạo dòng nếu chưa có), không bao giờ vượt tồn kho (BR-03).
  * Cộng dồn dùng một câu UPDATE có điều kiện (số lượng mới <= tồn kho) nên nhiều request cùng lúc
  * không thể làm tổng vượt tồn kho; nếu hai request cùng tạo dòng mới, request thua (trùng khóa) thử lại như cộng dồn.
+ * Ném AppError 409 nếu không đủ tồn kho.
  */
-export const addItem = async (userId, { productId, quantity }) => {
-  const product = await findVisibleProduct(productId);
-  const cart = await prisma.cart.upsert({ where: { userId }, update: {}, create: { userId } });
-
+const applyAdd = async (cart, product, quantity) => {
+  const productId = product.id;
   let added = false;
   for (let attempt = 0; attempt < 3 && !added; attempt += 1) {
     const existing = await prisma.cartItem.findUnique({
@@ -147,8 +188,68 @@ export const addItem = async (userId, { productId, quantity }) => {
   if (!added) {
     throw new AppError(409, 'Không thể cập nhật giỏ hàng, vui lòng thử lại', 'CONFLICT');
   }
+};
 
+/** Thêm sản phẩm vào giỏ, cộng dồn nếu đã có. */
+export const addItem = async (userId, { productId, quantity }) => {
+  const product = await findVisibleProduct(productId);
+  const cart = await prisma.cart.upsert({ where: { userId }, update: {}, create: { userId } });
+  await applyAdd(cart, product, quantity);
   return getCart(userId);
+};
+
+/**
+ * Gộp giỏ của khách (lưu trên trình duyệt) vào giỏ tài khoản ngay sau khi đăng nhập.
+ * Khác với thêm từng sản phẩm, gộp KHÔNG báo lỗi khi thiếu hàng mà thêm tối đa số lượng còn được phép
+ * và trả về ghi chú để giao diện báo lại cho người dùng, vì khách không nên mất cả giỏ chỉ vì một món hết hàng.
+ * @returns {{ cart: object, notes: string[] }}
+ */
+export const mergeCart = async (userId, requested) => {
+  const cart = await prisma.cart.upsert({ where: { userId }, update: {}, create: { userId } });
+  const notes = [];
+  let unavailable = 0;
+
+  for (const { productId, quantity } of mergeDuplicates(requested)) {
+    const product = await prisma.product.findUnique({
+      where: { id: productId },
+      include: productInclude,
+    });
+    if (!product || !isVisible(product)) {
+      unavailable += 1;
+      continue;
+    }
+
+    const existing = await prisma.cartItem.findUnique({
+      where: { cartId_productId: { cartId: cart.id, productId } },
+    });
+    const room = Math.max(0, product.stock - (existing?.quantity ?? 0));
+    const toAdd = Math.min(quantity, room);
+
+    let added = 0;
+    if (toAdd > 0) {
+      try {
+        await applyAdd(cart, product, toAdd);
+        added = toAdd;
+      } catch (error) {
+        // Hết hàng đúng lúc gộp (request khác vừa lấy mất): coi như không thêm được món này
+        if (!(error instanceof AppError)) throw error;
+      }
+    }
+    if (added < quantity) {
+      notes.push(
+        added === 0
+          ? `${product.name}: không thêm được vì đã hết hàng hoặc giỏ của bạn đã có đủ số lượng còn lại`
+          : `${product.name}: chỉ thêm được ${added} trên ${quantity} sản phẩm vì tồn kho không đủ`,
+      );
+    }
+  }
+  if (unavailable > 0) {
+    notes.push(
+      `${unavailable} sản phẩm trong giỏ tạm không còn được bán nên không được thêm vào giỏ`,
+    );
+  }
+
+  return { cart: await getCart(userId), notes };
 };
 
 // Dòng phải thuộc giỏ của chính người dùng; dòng của người khác trả 404 (không lộ sự tồn tại)

@@ -288,16 +288,6 @@ describe('Thêm vào giỏ từ thẻ sản phẩm', () => {
     expect(await screen.findByRole('link', { name: 'Giỏ hàng (1)' })).toBeInTheDocument();
   });
 
-  it('chưa đăng nhập: chuyển tới trang đăng nhập và không gọi API giỏ (US-14 AC1)', async () => {
-    const calls = mockServer(listHandlers([product()]));
-    renderApp('/san-pham');
-
-    await userEvent.click(await screen.findByRole('button', { name: 'Thêm iPhone 15 vào giỏ' }));
-
-    expect(await screen.findByLabelText('Mật khẩu')).toBeInTheDocument();
-    expect(calls.some((c) => c.key === 'POST /cart/items')).toBe(false);
-  });
-
   it('hết hàng thì nút bị khóa', async () => {
     signIn();
     mockServer(listHandlers([product({ inStock: false })]));
@@ -405,36 +395,12 @@ describe('Thêm vào giỏ từ trang chi tiết', () => {
     expect(screen.getByRole('button', { name: 'Hết hàng' })).toBeDisabled();
     expect(screen.queryByRole('group', { name: /Số lượng/ })).not.toBeInTheDocument();
   });
-
-  it('chưa đăng nhập: bấm thêm thì sang trang đăng nhập, đăng nhập xong quay lại đúng sản phẩm (AC1)', async () => {
-    const calls = mockServer({
-      ...productPageHandlers(),
-      'POST /auth/login': [200, session],
-    });
-    renderApp('/san-pham/iphone-15');
-    await screen.findByRole('heading', { name: 'iPhone 15', level: 1 });
-
-    await userEvent.click(screen.getByRole('button', { name: 'Thêm vào giỏ' }));
-    await userEvent.type(await screen.findByLabelText('Email'), 'khach@example.com');
-    await userEvent.type(screen.getByLabelText('Mật khẩu'), 'Matkhau123');
-    await userEvent.click(screen.getByRole('button', { name: 'Đăng nhập' }));
-
-    expect(await screen.findByRole('heading', { name: 'iPhone 15', level: 1 })).toBeInTheDocument();
-    expect(calls.some((c) => c.key === 'POST /cart/items')).toBe(false);
-  });
 });
 
 // ---------------------------------------------------------------------------
 // Trang giỏ hàng (US-15)
 // ---------------------------------------------------------------------------
 describe('Trang giỏ hàng', () => {
-  it('chưa đăng nhập thì chuyển tới trang đăng nhập (BR-11)', async () => {
-    mockServer(storefrontApi);
-    renderApp('/gio-hang');
-
-    expect(await screen.findByLabelText('Mật khẩu')).toBeInTheDocument();
-  });
-
   it('đặt tiêu đề tab trình duyệt', async () => {
     await openCart([line(1)]);
     await waitFor(() => expect(document.title).toBe('Giỏ hàng - TechStore'));

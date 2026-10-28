@@ -24,3 +24,21 @@ export const addItemSchema = z.object({
 });
 
 export const updateItemSchema = z.object({ quantity });
+
+// Giỏ của khách lưu trên trình duyệt: danh sách { productId, quantity }, tối đa 50 sản phẩm khác nhau
+// (chặn việc gửi danh sách khổng lồ tới API công khai /cart/preview)
+export const MAX_GUEST_ITEMS = 50;
+
+const guestEntry = z.object({
+  productId: z
+    .number({ error: 'Mã sản phẩm phải là số' })
+    .int('Mã sản phẩm phải là số nguyên')
+    .positive('Mã sản phẩm không hợp lệ'),
+  quantity,
+});
+
+export const guestCartSchema = z.object({
+  items: z
+    .array(guestEntry, { error: 'Danh sách sản phẩm không hợp lệ' })
+    .max(MAX_GUEST_ITEMS, `Giỏ tạm tối đa ${MAX_GUEST_ITEMS} sản phẩm`),
+});

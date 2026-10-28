@@ -1,13 +1,14 @@
 /**
- * @feature [F05] Giỏ hàng - Trang /gio-hang (yêu cầu đăng nhập, BR-11): xem, sửa số lượng, xóa sản phẩm (US-15).
+ * @feature [F05] Giỏ hàng - Trang /gio-hang: xem, sửa số lượng, xóa sản phẩm (US-15). Khách chưa đăng nhập dùng giỏ lưu trên
+ *  trình duyệt (xem useCart); đăng nhập là điều kiện của bước đặt hàng (F06), không phải của giỏ.
  *  - Số lượng từ 1 đến tồn kho (AC1); tổng tiền cập nhật ngay vì máy chủ trả lại toàn bộ giỏ sau mỗi thao tác (AC2).
  *  - Giỏ trống có gợi ý quay lại mua sắm (AC3).
  *  - Sản phẩm bị ẩn, hết hàng hoặc tồn kho giảm dưới số lượng được đánh dấu rõ và không tính vào tổng tiền (AC4).
  *  - Phí vận chuyển ước tính theo BR-05, kèm gợi ý số tiền còn thiếu để được miễn phí.
  * Nút "Đặt hàng" bị khóa cho tới khi làm F06.
  */
-import { useEffect, useState } from 'react';
-import { Link } from 'react-router-dom';
+import { useEffect, useState, useSyncExternalStore } from 'react';
+import { Link, useLocation } from 'react-router-dom';
 import {
   Alert,
   Button,
@@ -20,6 +21,7 @@ import {
 } from '@techstore/shared';
 import { assetUrl } from '../lib/api.js';
 import { useCart } from '../hooks/useCart.js';
+import { clearCartNotice, getCartNotice, subscribeCartNotice } from '../lib/cartNotice.js';
 import { FREE_SHIPPING_THRESHOLD, amountToFreeShipping, shippingFee } from '../lib/shipping.js';
 import QuantityStepper from '../components/cart/QuantityStepper.jsx';
 import Price from '../components/Price.jsx';
@@ -141,7 +143,8 @@ function CartLine({ item, busy, onChangeQuantity, onRemove, error, resetKey }) {
   );
 }
 
-function Summary({ cart }) {
+function Summary({ cart, isLoggedIn }) {
+  const location = useLocation();
   const fee = shippingFee(cart.subtotal);
   const missing = amountToFreeShipping(cart.subtotal);
   const progress = Math.min(100, Math.round((cart.subtotal / FREE_SHIPPING_THRESHOLD) * 100));
@@ -210,6 +213,19 @@ function Summary({ cart }) {
       <p className="text-center text-xs text-slate-500">
         Chức năng đặt hàng và thanh toán khi nhận hàng sắp ra mắt.
       </p>
+      {!isLoggedIn && (
+        <p className="rounded-xl bg-slate-100 p-3 text-center text-sm text-slate-700">
+          Giỏ hàng của bạn đang được lưu trên trình duyệt. Hãy{' '}
+          <Link
+            to="/dang-nhap"
+            state={{ from: location }}
+            className="font-semibold text-brand-600 hover:underline"
+          >
+            đăng nhập
+          </Link>{' '}
+          để đặt hàng; giỏ sẽ được giữ nguyên.
+        </p>
+      )}
       <Link
         to="/san-pham"
         className="block text-center text-sm font-semibold text-brand-600 hover:underline"
@@ -238,7 +254,10 @@ function CartSkeleton() {
 }
 
 export default function CartPage() {
-  const { cart, isPending, isError, error, refetch, updateItem, removeItem } = useCart();
+  const { cart, isLoggedIn, isPending, isError, error, refetch, updateItem, removeItem } =
+    useCart();
+  // Ghi chú sau khi gộp giỏ tạm vào tài khoản (ví dụ món bị giảm số lượng vì thiếu hàng)
+  const notes = useSyncExternalStore(subscribeCartNotice, getCartNotice, () => []);
   // Lỗi của thao tác gần nhất, gắn với đúng dòng để hiện ngay dưới dòng đó
   const [lineError, setLineError] = useState(null);
   // Tăng mỗi khi một thao tác bị từ chối: ô số lượng đã đổi tạm trên màn hình phải quay về số lượng thật
@@ -270,6 +289,27 @@ export default function CartPage() {
   return (
     <div className="space-y-6">
       <h1 className="text-3xl font-bold text-slate-900">Giỏ hàng</h1>
+
+      {notes.length > 0 && (
+        <div
+          role="status"
+          className="space-y-2 rounded-xl border border-amber-300 bg-amber-50 px-4 py-3 text-sm text-amber-900"
+        >
+          <p className="font-semibold">Giỏ hàng của bạn đã được điều chỉnh khi đăng nhập:</p>
+          <ul className="list-disc space-y-1 pl-5">
+            {notes.map((note) => (
+              <li key={note}>{note}</li>
+            ))}
+          </ul>
+          <button
+            type="button"
+            onClick={clearCartNotice}
+            className="font-semibold underline underline-offset-2 hover:text-amber-700"
+          >
+            Đã hiểu
+          </button>
+        </div>
+      )}
 
       {isPending && <CartSkeleton />}
 
@@ -315,7 +355,7 @@ export default function CartPage() {
               />
             ))}
           </ul>
-          <Summary cart={cart} />
+          <Summary cart={cart} isLoggedIn={isLoggedIn} />
         </div>
       )}
     </div>
