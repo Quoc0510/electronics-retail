@@ -9,6 +9,7 @@
  */
 import { Prisma } from '@prisma/client';
 import { prisma } from '../lib/prisma.js';
+import { escapeLike } from '../lib/like.js';
 import { AppError } from '../utils/AppError.js';
 
 // Giá bán hiện hành (BR-02), dùng chung cho lọc theo khoảng giá và sắp xếp theo giá
@@ -39,9 +40,6 @@ const toSummary = (product) => ({
   category: product.category,
   brand: product.brand,
 });
-
-// "%" và "_" là ký tự đặc biệt của LIKE; người dùng gõ "50%" thì phải tìm đúng chuỗi "50%"
-const escapeLike = (text) => text.replace(/[\\%_]/g, '\\$&');
 
 const buildWhere = ({ search, category, brand, minPrice, maxPrice, onSale }) => {
   const conditions = [

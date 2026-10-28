@@ -8,6 +8,7 @@ import { authenticate, requireRole } from '../middlewares/auth.js';
 import { adminCatalogRouter } from './catalog.routes.js'; // [F02]
 import productRoutes from './product.routes.js'; // [F03]
 import adminOrderRoutes from './adminOrder.routes.js'; // [F07]
+import { adminUserRouter, statsRouter } from './adminUser.routes.js'; // [F10]
 
 const router = Router();
 
@@ -26,5 +27,9 @@ router.use('/products', productRoutes);
 
 // [F07] Quản lý đơn hàng: /api/admin/orders
 router.use('/orders', adminOrderRoutes);
+
+// [F10] Thống kê dashboard và quản lý người dùng: /api/admin/stats, /api/admin/users
+router.use('/stats', statsRouter);
+router.use('/users', adminUserRouter);
 
 export default router;

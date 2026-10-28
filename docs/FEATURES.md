@@ -17,12 +17,14 @@ Mỗi file code có header `@feature [Fxx] ...` để truy vết file → tính 
 | F07 | Quản lý đơn hàng                                          | Bắt buộc                         | Xong (chờ merge) |
 | F08 | Đánh giá và yêu thích                                     | Nên làm (cắt nếu trễ)            | Chưa làm         |
 | F09 | Khuyến mãi / mã giảm giá                                  | Nên làm (cắt nếu trễ)            | Chưa làm         |
-| F10 | Dashboard và báo cáo                                      | Bắt buộc                         | Chưa làm         |
+| F10 | Dashboard và báo cáo, quản lý người dùng                  | Bắt buộc                         | Xong (chờ merge) |
 | F11 | Mở rộng (VNPay/ZaloPay sandbox, email)                    | Chỉ làm nếu dư thời gian         | Chưa làm         |
 | F12 | Trải nghiệm mở rộng: chế độ tối, so sánh, trang thông tin | Có thể làm thêm                  | Xong             |
 | F13 | Đặt hàng không cần đăng nhập và điểm thành viên           | Bắt buộc (yêu cầu bổ sung 28/10) | Xong (chờ merge) |
 
 F12 (đợt 1) gồm: chế độ tối, so sánh sản phẩm, trang thông tin (Giới thiệu, Liên hệ, Hỏi đáp, Chính sách), các khối trang chủ mới (thương hiệu, banner, số liệu, sản phẩm đã xem). Đợt 2 (cần backend, làm sau F05-F07): form liên hệ lưu tin nhắn, đăng ký nhận tin, yêu thích và đánh giá (F08), tin tức.
+
+F10: trang tổng quan Admin có doanh thu 30 ngày (biểu đồ cột), số đơn theo trạng thái, 5 sản phẩm bán chạy, sản phẩm sắp hết hàng; trang Người dùng có tìm theo email, lọc, khóa và mở khóa tài khoản. Chưa có chọn khoảng ngày, xuất báo cáo, đổi vai trò (xem TECH_DEBT.md).
 
 F13 (yêu cầu bổ sung 28/10 sau khi dùng thử): khách chưa đăng nhập vẫn đặt hàng được, tra cứu và hủy đơn bằng mã đơn + số điện thoại; thành viên được tích điểm khi đơn hoàn thành (mỗi 10.000 đ được 1 điểm). Chưa có đổi điểm lấy ưu đãi.
 

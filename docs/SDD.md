@@ -310,6 +310,7 @@ Môi trường local: `docker-compose.yml` chạy PostgreSQL; backend và hai fr
 | 21/10/2026 | Chốt schema ban đầu F00–F07; không dùng biến thể sản phẩm; giỏ hàng yêu cầu đăng nhập                                                                                                                                | Phù hợp quy mô 6 tuần, giảm rủi ro trễ tiến độ                                                                          |
 | 28/10/2026 | Giỏ hàng cho khách chưa đăng nhập (lưu trên trình duyệt, gộp vào tài khoản khi đăng nhập); thêm `POST /api/cart/preview` (công khai) và `POST /api/cart/merge`                                                       | Phản hồi người dùng thử: bắt đăng nhập ngay khi thêm vào giỏ gây cản trở; không đổi schema                              |
 | 28/10/2026 | Đặt hàng không cần đăng nhập (F13): `orders.user_id` cho phép rỗng, thêm `idempotency_key`, `points_earned`, `users.points`; tra cứu và hủy đơn bằng mã đơn + số điện thoại; cộng điểm thành viên khi đơn hoàn thành | Phản hồi người dùng thử lần hai: bắt đăng nhập mới được đặt hàng làm khách bỏ giỏ; mua hàng chỉ để tích điểm thành viên |
+| 28/10/2026 | Dashboard thống kê và quản lý người dùng (F10): `GET /api/admin/stats`, `GET /api/admin/users`, `PATCH /api/admin/users/:id/status`; không đổi schema                                                                | Hoàn thành chức năng bắt buộc F10 (US-26, US-27)                                                                        |
 | 28/10/2026 | `addresses.district` cho phép rỗng; địa chỉ ghép bỏ phần trống                                                                                                                                                       | Nhiều địa phương đã bỏ cấp quận/huyện nên không thể bắt khách nhập                                                      |
 
 ## 9. Danh sách API đã triển khai
@@ -524,6 +525,27 @@ Quyết định thiết kế F07:
 - **Tìm kiếm của Admin** dùng SQL thuần với `ILIKE` và thoát ký tự `%`, `_` (Prisma `contains` không tự thoát chúng nên gõ `%` sẽ khớp mọi đơn; có test).
 - Đơn của người khác trả 404 ở mọi API của khách, mã sai định dạng trả 400.
 
+### F10 - Dashboard và quản lý người dùng
+
+| Method | Đường dẫn                   | Quyền | Mô tả                                                                                                                     | User story |
+| ------ | --------------------------- | ----- | ------------------------------------------------------------------------------------------------------------------------- | ---------- |
+| GET    | /api/admin/stats            | ADMIN | Một lần trả đủ: `summary`, `revenueByDay` (30 ngày), `ordersByStatus`, `topProducts` (5), `lowStock`                      | US-26      |
+| GET    | /api/admin/users            | ADMIN | Danh sách người dùng: `search` (email hoặc họ tên), `status` (`active` hoặc `locked`), `page`, `pageSize` (tối đa 50)     | US-27      |
+| PATCH  | /api/admin/users/:id/status | ADMIN | `{ isActive: boolean }`: khóa hoặc mở khóa; khóa thì thu hồi mọi phiên đăng nhập; tự khóa mình trả 400 `CANNOT_LOCK_SELF` | US-27      |
+
+Dòng người dùng: `id, email, fullName, phone, role, isActive, points, createdAt, orderCount` (không bao giờ có mật khẩu). Mã lỗi thêm: `CANNOT_LOCK_SELF` (400), `USER_NOT_FOUND` (404).
+
+Quyết định thiết kế F10:
+
+- **Không đổi schema:** mọi số liệu tính từ bảng có sẵn nên không có migration.
+- **Ngày theo giờ Việt Nam (BR-17):** `created_at` lưu UTC dạng `timestamp` không múi giờ, nên SQL gắn UTC rồi mới đổi sang `Asia/Ho_Chi_Minh` (`(created_at AT TIME ZONE 'UTC') AT TIME ZONE 'Asia/Ho_Chi_Minh'`); gắn thẳng múi giờ Việt Nam vào cột không múi giờ sẽ lệch 14 tiếng. Cửa sổ 30 ngày bắt đầu từ 00:00 giờ Việt Nam của ngày đầu tiên. Có test ở các ranh giới 16:59:59 và 17:00:00 UTC.
+- **Doanh thu theo ngày hoàn thành, không phải ngày đặt:** lấy từ dòng lịch sử `COMPLETED` (thời điểm thu tiền COD, BR-08). Ngày không có đơn vẫn có mặt với giá trị 0 để biểu đồ đủ 30 cột (điền ở service, không dựa vào SQL).
+- **Chống tràn số:** `SUM` trên cột `int` của PostgreSQL trả `bigint` và JSON không chứa được `BigInt`, nên SQL ép kiểu rõ ràng và service đổi sang `Number`; doanh thu sản phẩm nhân `quantity::bigint * unit_price` vì từng dòng vẫn có thể vượt 2^31 khi gộp nhiều đơn (có test với tổng 4 tỷ).
+- **Bán chạy** xếp theo số lượng, hòa thì theo doanh thu rồi theo mã sản phẩm để thứ tự luôn xác định.
+- **Khóa tài khoản trong một transaction:** cập nhật `isActive` và thu hồi refresh token cùng lúc, để không có khoảng hở tài khoản đã khóa mà token làm mới vẫn dùng được. Access token còn hạn bị từ chối ở request kế tiếp vì `authenticate` luôn đọc lại người dùng từ CSDL (F01). Mở khóa không làm sống lại phiên cũ. Gọi lại với cùng trạng thái vẫn thành công.
+- **Tìm kiếm người dùng** thoát `%`, `_`, `\` trước khi đưa vào `contains` (hàm dùng chung `lib/like.js`, trước đó F04 và F07 mỗi nơi giữ một bản sao).
+- Mọi route nằm dưới `/api/admin` nên tự có kiểm tra quyền ADMIN; khách hàng nhận 403, chưa đăng nhập nhận 401 (có test cho từng route).
+
 ### Quyết định bảo mật của F01
 
 - Access token JWT sống 15 phút; refresh token là chuỗi ngẫu nhiên 256 bit sống 7 ngày, DB chỉ lưu bản băm SHA-256.
@@ -547,13 +569,14 @@ Client và Admin dùng chung `shared` để không viết lặp logic đăng nh�
 
 ### Route
 
-| Ứng dụng | Đường dẫn             | Yêu cầu       | Trang                                    | User story   |
-| -------- | --------------------- | ------------- | ---------------------------------------- | ------------ |
-| Client   | `/dang-nhap`          | Công khai     | Đăng nhập                                | US-02        |
-| Client   | `/dang-ky`            | Công khai     | Đăng ký                                  | US-01        |
-| Client   | `/tai-khoan`          | Đã đăng nhập  | Hồ sơ, đổi mật khẩu, sổ địa chỉ (3 mục)  | US-04        |
-| Admin    | `/dang-nhap`          | Công khai     | Đăng nhập quản trị                       | US-02, US-05 |
-| Admin    | `/` và các trang khác | Vai trò ADMIN | Tổng quan (sẽ thay bằng dashboard ở F10) | US-05        |
+| Ứng dụng | Đường dẫn             | Yêu cầu       | Trang                                   | User story   |
+| -------- | --------------------- | ------------- | --------------------------------------- | ------------ |
+| Client   | `/dang-nhap`          | Công khai     | Đăng nhập                               | US-02        |
+| Client   | `/dang-ky`            | Công khai     | Đăng ký                                 | US-01        |
+| Client   | `/tai-khoan`          | Đã đăng nhập  | Hồ sơ, đổi mật khẩu, sổ địa chỉ (3 mục) | US-04        |
+| Admin    | `/dang-nhap`          | Công khai     | Đăng nhập quản trị                      | US-02, US-05 |
+| Admin    | `/` và các trang khác | Vai trò ADMIN | Tổng quan (dashboard thống kê từ F10)   | US-05, US-26 |
+| Admin    | `/nguoi-dung`         | Vai trò ADMIN | Quản lý người dùng (F10)                | US-27        |
 
 ### Luồng làm mới phiên (US-03)
 
@@ -751,7 +774,7 @@ Thương hiệu nổi bật, banner đôi (chỉ hiện nếu danh mục tương
 | `OrderDetailPage` (`/don-hang/:code`) | Khách hàng, địa chỉ, sản phẩm, tổng tiền, lịch sử kèm người thực hiện, khung "Xử lý đơn hàng"                                                                                                                     |
 | Xử lý đơn                             | Chỉ hiện nút của bước hợp lệ tiếp theo theo `allowedNext` (Xác nhận đơn, Bắt đầu giao hàng, Hoàn thành), có ô ghi chú tùy chọn vào lịch sử; "Hủy đơn" mở form bắt buộc lý do. Máy chủ vẫn từ chối bước sai        |
 | In phiếu (US-20)                      | Nút "In phiếu" gọi hộp thoại in của trình duyệt. Kiểu in dùng biến thể `print:` của Tailwind: ẩn thanh bên, thanh trên, nút và lịch sử; hiện đầu phiếu "TechStore - Phiếu đơn hàng", sản phẩm, tổng tiền, địa chỉ |
-| Trang tổng quan                       | Thêm thẻ "Đơn chờ xác nhận" (lấy tổng bằng `pageSize=1`) dẫn tới danh sách đơn                                                                                                                                    |
+| Trang tổng quan                       | Thẻ "Đơn chờ xác nhận" dẫn tới danh sách đơn (số lấy từ thống kê F10)                                                                                                                                             |
 
 ## 17. Giao diện đặt hàng không cần đăng nhập F13 (Client và Admin)
 
@@ -763,3 +786,14 @@ Thương hiệu nổi bật, banner đôi (chỉ hiện nếu danh mục tương
 | `CartPage`                              | Nút luôn là "Tiến hành đặt hàng"; khách thấy lời mời tích điểm, thành viên thấy điểm của đơn.                                                                                                                                                                                                                                                                                                                                                                                        |
 | `ProfilePage`                           | Thẻ chào hiện điểm thành viên, tải lại từ `GET /users/me` vì điểm đổi khi Admin hoàn thành đơn.                                                                                                                                                                                                                                                                                                                                                                                      |
 | Admin `OrdersPage`, `OrderDetailPage`   | Đơn khách ghi "Khách không đăng nhập" (chi tiết không còn đọc `customer.fullName` của đơn không có chủ); thành viên hiện điểm hiện có và điểm của đơn.                                                                                                                                                                                                                                                                                                                               |
+
+## 18. Giao diện dashboard và quản lý người dùng F10 (Admin)
+
+| Thành phần                  | Vai trò                                                                                                                                                                                                                                                                                                                                                       |
+| --------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `DashboardPage` (`/`)       | Bốn thẻ (doanh thu, đơn hoàn thành, đơn chờ xác nhận, khách hàng), biểu đồ doanh thu, đơn theo trạng thái, sản phẩm bán chạy, sản phẩm sắp hết hàng, rồi các thẻ danh mục hàng hóa và lối tắt cũ. Thống kê là một truy vấn riêng nên khi lỗi chỉ khối thống kê báo lỗi (có nút Thử lại), các thẻ danh mục vẫn hiện; thẻ hiện dấu "–" thay vì quay mãi.        |
+| `RevenueChart`              | Biểu đồ cột vẽ bằng SVG (không thêm thư viện): trục có mốc tròn (`niceMax`), nhãn rút gọn (`compactVnd`: "1,5 tr", "2 tỷ"), mỗi cột có chú thích ngày, doanh thu, số đơn; `role="img"` kèm tổng doanh thu và bảng số liệu dạng văn bản trong khung "Xem bảng số liệu" cho người dùng trình đọc màn hình. Trên điện thoại khung cuộn ngang thay vì ép nhỏ chữ. |
+| `UsersPage` (`/nguoi-dung`) | Bảng người dùng: tìm theo email hoặc họ tên (chờ 300 ms sau khi ngừng gõ), lọc trạng thái, phân trang. Nút Khóa hỏi xác nhận và nói rõ hậu quả (đăng xuất mọi thiết bị); Mở khóa làm ngay. Dòng của chính mình không có nút, chỉ ghi "Tài khoản của bạn". Lỗi từ máy chủ hiện ngay trên bảng.                                                                 |
+| `AdminLayout`               | Thêm mục "Người dùng" ở thanh bên.                                                                                                                                                                                                                                                                                                                            |
+
+Quyết định: thẻ số liệu xếp biểu tượng và nhãn ở hàng trên, con số ở hàng dưới chiếm cả bề ngang thẻ vì số tiền lớn ("467.920.000 ₫") bị ngắt dòng khi đặt cạnh biểu tượng ở màn hình 1280 px (phát hiện khi xem trên trình duyệt thật, test đơn vị không thấy được). Bộ chờ khi gõ tìm kiếm chỉ về trang 1 khi từ khóa thật sự đổi (sửa lỗi ở cả `ProductsPage`, `OrdersPage` và `UsersPage`: bấm "Trang sau" trong 300 ms đầu từng bị giật về trang 1).

@@ -1,7 +1,7 @@
 /**
- * @feature [F01][F02][F03][F04][F07] Khung chung của các trang Admin: thanh bên tối có menu và thông tin người dùng.
+ * @feature [F01][F02][F03][F04][F07][F10] Khung chung của các trang Admin: thanh bên tối có menu và thông tin người dùng.
  * Trên màn hình rộng thanh bên luôn hiện; trên điện thoại nó là ngăn kéo mở bằng nút menu ở thanh trên cùng.
- * Các tính năng sau (F07 đơn hàng, F10 thống kê...) sẽ thêm mục vào MENU_ITEMS.
+ * Mỗi tính năng quản trị mới thêm một mục vào MENU_ITEMS.
  */
 import { useEffect, useState } from 'react';
 import { NavLink, Outlet, useLocation } from 'react-router-dom';
@@ -15,6 +15,7 @@ import {
   IconLayers,
   IconLogOut,
   IconMenu,
+  IconUsers,
   Logo,
   ThemeToggle,
 } from '@techstore/shared';
@@ -26,6 +27,7 @@ const MENU_ITEMS = [
   { to: '/danh-muc', label: 'Danh mục', Icon: IconGrid }, // [F02]
   { to: '/thuong-hieu', label: 'Thương hiệu', Icon: IconLayers }, // [F02]
   { to: '/san-pham', label: 'Sản phẩm', Icon: IconBox }, // [F03]
+  { to: '/nguoi-dung', label: 'Người dùng', Icon: IconUsers }, // [F10]
 ];
 
 const linkClass = ({ isActive }) =>
