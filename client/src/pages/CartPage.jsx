@@ -1,11 +1,12 @@
 /**
- * @feature [F05] Giỏ hàng - Trang /gio-hang: xem, sửa số lượng, xóa sản phẩm (US-15). Khách chưa đăng nhập dùng giỏ lưu trên
- *  trình duyệt (xem useCart); đăng nhập là điều kiện của bước đặt hàng (F06), không phải của giỏ.
+ * @feature [F05][F13] Giỏ hàng - Trang /gio-hang: xem, sửa số lượng, xóa sản phẩm (US-15). Khách chưa đăng nhập dùng giỏ lưu trên
+ *  trình duyệt (xem useCart) và đặt hàng được luôn (F13); đăng nhập chỉ để tích điểm thành viên (BR-15).
  *  - Số lượng từ 1 đến tồn kho (AC1); tổng tiền cập nhật ngay vì máy chủ trả lại toàn bộ giỏ sau mỗi thao tác (AC2).
  *  - Giỏ trống có gợi ý quay lại mua sắm (AC3).
  *  - Sản phẩm bị ẩn, hết hàng hoặc tồn kho giảm dưới số lượng được đánh dấu rõ và không tính vào tổng tiền (AC4).
  *  - Phí vận chuyển ước tính theo BR-05, kèm gợi ý số tiền còn thiếu để được miễn phí.
- * Nút "Đặt hàng" dẫn tới /dat-hang (F06) khi mọi dòng đều mua được; khách chưa đăng nhập được nhờ đăng nhập rồi quay lại đúng bước đặt hàng.
+ * Nút "Đặt hàng" dẫn tới /dat-hang (F06) khi mọi dòng đều mua được, kể cả khi chưa đăng nhập; khách muốn tích điểm thì đăng nhập
+ * rồi quay lại đúng bước đặt hàng.
  */
 import { useEffect, useState, useSyncExternalStore } from 'react';
 import { Link } from 'react-router-dom';
@@ -16,6 +17,7 @@ import {
   IconBag,
   IconTrash,
   IconTruck,
+  calculatePoints,
   formatVnd,
   getErrorMessage,
 } from '@techstore/shared';
@@ -148,6 +150,7 @@ function Summary({ cart, isLoggedIn }) {
   const missing = amountToFreeShipping(cart.subtotal);
   const progress = Math.min(100, Math.round((cart.subtotal / FREE_SHIPPING_THRESHOLD) * 100));
   const hasIssues = cart.items.length > 0 && !cart.canCheckout;
+  const points = calculatePoints(cart.subtotal); // BR-15
 
   return (
     <aside
@@ -211,7 +214,7 @@ function Summary({ cart, isLoggedIn }) {
           to="/dat-hang"
           className="inline-flex w-full items-center justify-center gap-2 rounded-xl bg-gradient-to-r from-brand-600 to-violet-600 px-6 py-3 text-base font-semibold text-white shadow-sm transition hover:shadow-glow hover:brightness-110"
         >
-          {isLoggedIn ? 'Tiến hành đặt hàng' : 'Đăng nhập để đặt hàng'}
+          Tiến hành đặt hàng
         </Link>
       ) : (
         <Button size="lg" className="w-full" disabled>
@@ -219,9 +222,16 @@ function Summary({ cart, isLoggedIn }) {
         </Button>
       )}
       <p className="text-center text-xs text-slate-500">Thanh toán khi nhận hàng (COD).</p>
+      {/* [F13] BR-15: thành viên được tích điểm; khách không đăng nhập vẫn đặt được, chỉ không có điểm */}
+      {isLoggedIn && points > 0 && (
+        <p className="rounded-xl bg-emerald-50 p-3 text-center text-sm font-medium text-emerald-800">
+          Đơn này được {points} điểm thành viên khi hoàn thành.
+        </p>
+      )}
       {!isLoggedIn && (
         <p className="rounded-xl bg-slate-100 p-3 text-center text-sm text-slate-700">
-          Giỏ hàng của bạn đang được lưu trên trình duyệt. Hãy{' '}
+          Bạn có thể đặt hàng ngay mà không cần tài khoản. Muốn tích{' '}
+          {points > 0 ? `${points} điểm thành viên cho đơn này` : 'điểm thành viên'}? Hãy{' '}
           <Link
             to="/dang-nhap"
             // Đăng nhập xong đi thẳng tới bước đặt hàng (giỏ tạm được gộp vào tài khoản trong lúc đó)
@@ -229,8 +239,8 @@ function Summary({ cart, isLoggedIn }) {
             className="font-semibold text-brand-600 hover:underline"
           >
             đăng nhập
-          </Link>{' '}
-          để đặt hàng; giỏ sẽ được giữ nguyên.
+          </Link>
+          .
         </p>
       )}
       <Link

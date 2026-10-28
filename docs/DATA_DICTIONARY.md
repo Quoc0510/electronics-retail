@@ -21,6 +21,7 @@ Phục vụ rubric TC2.1. Nguồn sự thật là [schema.prisma](../backend/pri
 | phone         | text    | tùy chọn           | Số điện thoại                                  |
 | role          | role    | mặc định CUSTOMER  | Vai trò                                        |
 | is_active     | boolean | mặc định true      | false = tài khoản bị khóa                      |
+| points        | int     | >= 0, mặc định 0   | Điểm thành viên (BR-15, F13)                   |
 
 ## refresh_tokens - Phiên đăng nhập (F01)
 
@@ -33,12 +34,13 @@ Phục vụ rubric TC2.1. Nguồn sự thật là [schema.prisma](../backend/pri
 
 ## addresses - Sổ địa chỉ (F01)
 
-| Cột                              | Kiểu    | Ràng buộc               | Mô tả                     |
-| -------------------------------- | ------- | ----------------------- | ------------------------- |
-| user_id                          | int     | FK users, xóa theo user | Chủ sở hữu                |
-| recipient_name, phone            | text    | bắt buộc                | Người nhận, số điện thoại |
-| province, district, ward, street | text    | bắt buộc                | Địa chỉ chi tiết          |
-| is_default                       | boolean | mặc định false          | Địa chỉ mặc định          |
+| Cột                    | Kiểu    | Ràng buộc               | Mô tả                                                                                                       |
+| ---------------------- | ------- | ----------------------- | ----------------------------------------------------------------------------------------------------------- |
+| user_id                | int     | FK users, xóa theo user | Chủ sở hữu                                                                                                  |
+| recipient_name, phone  | text    | bắt buộc                | Người nhận, số điện thoại                                                                                   |
+| province, ward, street | text    | bắt buộc                | Địa chỉ chi tiết                                                                                            |
+| district               | text    | tùy chọn (null)         | Quận/huyện, không bắt buộc vì nhiều địa phương đã bỏ cấp này (migration `20261028010000_district_optional`) |
+| is_default             | boolean | mặc định false          | Địa chỉ mặc định                                                                                            |
 
 ## categories, brands - Danh mục, thương hiệu (F02)
 
@@ -80,17 +82,19 @@ Phục vụ rubric TC2.1. Nguồn sự thật là [schema.prisma](../backend/pri
 | cart_items | cart_id, product_id | int  | duy nhất theo cặp; FK | Một dòng cho mỗi sản phẩm      |
 | cart_items | quantity            | int  | >= 1                  | Số lượng                       |
 
-## orders - Đơn hàng (F06, F07)
+## orders - Đơn hàng (F06, F07, F13)
 
-| Cột                                     | Kiểu         | Ràng buộc        | Mô tả                                         |
-| --------------------------------------- | ------------ | ---------------- | --------------------------------------------- |
-| code                                    | text         | duy nhất         | Mã đơn `TSyymmdd-xxxx` (BR-12)                |
-| user_id                                 | int          | FK users         | Người đặt                                     |
-| status                                  | order_status | mặc định PENDING | Trạng thái                                    |
-| payment_method, payment_status          | enum         | COD, UNPAID      | Thanh toán                                    |
-| subtotal, shipping_fee, total           | int          | >= 0             | Tiền hàng, phí vận chuyển (BR-05), tổng (VND) |
-| recipient_name, phone, shipping_address | text         | bắt buộc         | Bản sao thông tin giao hàng (BR-04)           |
-| note, cancel_reason                     | text         | tùy chọn         | Ghi chú của khách, lý do hủy                  |
+| Cột                                     | Kiểu         | Ràng buộc          | Mô tả                                                                                       |
+| --------------------------------------- | ------------ | ------------------ | ------------------------------------------------------------------------------------------- |
+| code                                    | text         | duy nhất           | Mã đơn `TSyymmdd-xxxx` (BR-12)                                                              |
+| user_id                                 | int          | tùy chọn, FK users | Người đặt; rỗng = đơn của khách không đăng nhập (F13, BR-11)                                |
+| status                                  | order_status | mặc định PENDING   | Trạng thái                                                                                  |
+| payment_method, payment_status          | enum         | COD, UNPAID        | Thanh toán                                                                                  |
+| subtotal, shipping_fee, total           | int          | >= 0               | Tiền hàng, phí vận chuyển (BR-05), tổng (VND)                                               |
+| recipient_name, phone, shipping_address | text         | bắt buộc           | Bản sao thông tin giao hàng (BR-04)                                                         |
+| note, cancel_reason                     | text         | tùy chọn           | Ghi chú của khách, lý do hủy                                                                |
+| points_earned                           | int          | >= 0, mặc định 0   | Điểm đã cộng cho thành viên khi đơn hoàn thành (BR-15)                                      |
+| idempotency_key                         | text         | duy nhất, tùy chọn | Mã do trình duyệt sinh cho mỗi lần đặt của khách không đăng nhập, chống tạo đơn trùng (F13) |
 
 ## order_items - Dòng đơn hàng (F06, F07)
 

@@ -298,7 +298,6 @@ describe('POST /api/orders - địa chỉ giao hàng (AC1)', () => {
     ['thiếu họ tên', { shipping: { ...shipping, recipientName: '' } }],
     ['số điện thoại sai', { shipping: { ...shipping, phone: '123' } }],
     ['thiếu tỉnh/thành', { shipping: { ...shipping, province: '' } }],
-    ['thiếu quận/huyện', { shipping: { ...shipping, district: '  ' } }],
     ['thiếu phường/xã', { shipping: { ...shipping, ward: '' } }],
     ['thiếu số nhà, đường', { shipping: { ...shipping, street: '' } }],
     ['ghi chú quá dài', { shipping, note: 'a'.repeat(501) }],

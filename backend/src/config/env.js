@@ -17,6 +17,9 @@ const envSchema = z.object({
   JWT_ACCESS_SECRET: z.string().min(32, 'JWT_ACCESS_SECRET phải dài ít nhất 32 ký tự'),
   // [F01] Giới hạn số lần gọi API đăng nhập / 15 phút / IP
   LOGIN_RATE_LIMIT: z.coerce.number().int().positive().default(10),
+  // [F13] Giới hạn số lần đặt hàng của khách vãng lai và số lần tra cứu/hủy đơn bằng mã đơn + số điện thoại / 15 phút / IP
+  GUEST_ORDER_RATE_LIMIT: z.coerce.number().int().positive().default(10),
+  ORDER_LOOKUP_RATE_LIMIT: z.coerce.number().int().positive().default(20),
   // [F03] Thư mục lưu ảnh tải lên (mặc định backend/uploads). Có thể đặt đường dẫn tuyệt đối
   UPLOAD_DIR: z.string().optional(),
 });

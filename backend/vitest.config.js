@@ -30,6 +30,8 @@ export default defineConfig({
       DATABASE_URL: TEST_DATABASE_URL,
       JWT_ACCESS_SECRET: 'khoa-bi-mat-chi-dung-cho-test-khong-dung-o-dau-khac-0123456789',
       LOGIN_RATE_LIMIT: '1000',
+      GUEST_ORDER_RATE_LIMIT: '1000',
+      ORDER_LOOKUP_RATE_LIMIT: '1000',
       UPLOAD_DIR: TEST_UPLOAD_DIR,
     },
     coverage: {

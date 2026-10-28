@@ -10,7 +10,9 @@ import { EMPTY_ADDRESS, validateAddress as validate } from '../../lib/addressVal
 // Form thêm hoặc sửa một địa chỉ. address = null nghĩa là thêm mới
 function AddressForm({ address, onDone, onCancel }) {
   const queryClient = useQueryClient();
-  const form = useFormState(address ?? EMPTY_ADDRESS);
+  const form = useFormState(
+    address ? { ...address, district: address.district ?? '' } : EMPTY_ADDRESS,
+  );
 
   const submit = async ({ id: _id, userId: _userId, createdAt: _c, updatedAt: _u, ...values }) => {
     const payload = Object.fromEntries(
@@ -38,7 +40,7 @@ function AddressForm({ address, onDone, onCancel }) {
         <FormField label="Tên người nhận" {...form.bind('recipientName')} />
         <FormField label="Số điện thoại người nhận" type="tel" {...form.bind('phone')} />
         <FormField label="Tỉnh/Thành phố" {...form.bind('province')} />
-        <FormField label="Quận/Huyện" {...form.bind('district')} />
+        <FormField label="Quận/Huyện (nếu có)" {...form.bind('district')} />
         <FormField label="Phường/Xã" {...form.bind('ward')} />
         <FormField label="Số nhà, tên đường" {...form.bind('street')} />
       </div>
@@ -138,7 +140,9 @@ export default function AddressBook() {
                 )}
               </div>
               <p className="mt-1.5 text-sm text-slate-600">
-                {address.street}, {address.ward}, {address.district}, {address.province}
+                {[address.street, address.ward, address.district, address.province]
+                  .filter(Boolean)
+                  .join(', ')}
               </p>
               <div className="mt-3 flex flex-wrap gap-2">
                 <Button variant="secondary" onClick={() => setEditing(address)}>

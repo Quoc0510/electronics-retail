@@ -61,6 +61,8 @@ model User {
   role         Role     @default(CUSTOMER)
   // false = tài khoản bị khóa (US-27)
   isActive     Boolean  @default(true) @map("is_active")
+  // [F13] BR-15: điểm thành viên, cộng khi đơn của thành viên hoàn thành (CHECK >= 0 trong migration)
+  points       Int      @default(0)
   createdAt    DateTime @default(now()) @map("created_at")
   updatedAt    DateTime @updatedAt @map("updated_at")
 
@@ -95,7 +97,8 @@ model Address {
   recipientName String   @map("recipient_name")
   phone         String
   province      String
-  district      String
+  // Từ 2025 nhiều địa phương không còn cấp quận/huyện nên không bắt buộc (null = không có)
+  district      String?
   ward          String
   street        String
   isDefault     Boolean  @default(false) @map("is_default")
@@ -227,7 +230,8 @@ model Order {
   id              Int           @id @default(autoincrement())
   // BR-12: mã đơn dạng TSyymmdd-xxxx
   code            String        @unique
-  userId          Int           @map("user_id")
+  // [F13] null = đơn của khách vãng lai (đặt hàng không cần đăng nhập, BR-11)
+  userId          Int?          @map("user_id")
   status          OrderStatus   @default(PENDING)
   paymentMethod   PaymentMethod @default(COD) @map("payment_method")
   paymentStatus   PaymentStatus @default(UNPAID) @map("payment_status")
@@ -241,10 +245,15 @@ model Order {
   shippingAddress String        @map("shipping_address")
   note            String?
   cancelReason    String?       @map("cancel_reason")
+  // [F13] BR-15: điểm đã cộng cho thành viên khi đơn hoàn thành (0 nếu chưa hoàn thành hoặc là đơn khách vãng lai)
+  pointsEarned    Int           @default(0) @map("points_earned")
+  // [F13] Mã do trình duyệt sinh cho mỗi lần đặt của khách vãng lai: gửi lại cùng mã (bấm đúp, mất mạng rồi thử lại)
+  // chỉ trả đơn đã tạo, không tạo đơn thứ hai
+  idempotencyKey  String?       @unique @map("idempotency_key")
   createdAt       DateTime      @default(now()) @map("created_at")
   updatedAt       DateTime      @updatedAt @map("updated_at")
 
-  user    User                 @relation(fields: [userId], references: [id])
+  user    User?                @relation(fields: [userId], references: [id], onDelete: Restrict)
   items   OrderItem[]
   history OrderStatusHistory[]
 

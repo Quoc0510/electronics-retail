@@ -1,6 +1,8 @@
 /**
- * @feature [F06] Đặt hàng - Trang /dat-hang (yêu cầu đăng nhập): chọn hoặc nhập địa chỉ giao hàng, xem lại sản phẩm, phí vận chuyển
+ * @feature [F06][F13] Đặt hàng - Trang /dat-hang: chọn hoặc nhập địa chỉ giao hàng, xem lại sản phẩm, phí vận chuyển
  * và tổng tiền, rồi xác nhận đặt hàng thanh toán khi nhận hàng (US-16 AC1, AC2).
+ *  - [F13] Không cần đăng nhập (BR-11): khách nhập địa chỉ trực tiếp, gửi giỏ lưu trên trình duyệt kèm requestId (chống đặt
+ *    trùng). Đăng nhập chỉ để dùng sổ địa chỉ và tích điểm thành viên (BR-15); trang nói rõ số điểm đơn này sẽ được.
  *  - Có địa chỉ đã lưu thì chọn địa chỉ mặc định sẵn; chưa có thì mở sẵn form nhập địa chỉ mới.
  *  - Nút xác nhận bị khóa trong lúc đang gửi nên bấm đúp không gửi hai lần (AC6; backend cũng chặn đặt trùng).
  *  - Hết hàng, sản phẩm bị ẩn hoặc không đủ số lượng: hiện danh sách sản phẩm có vấn đề kèm đường về giỏ hàng (AC4).
@@ -18,11 +20,14 @@ import {
   IconCash,
   IconCheckCircle,
   IconTruck,
+  calculatePoints,
   formatVnd,
   getErrorMessage,
   useFormState,
 } from '@techstore/shared';
 import { api, assetUrl } from '../lib/api.js';
+import { clearGuestItems } from '../lib/guestCart.js'; // [F13]
+import { newRequestId, rememberGuestOrder } from '../lib/guestOrder.js'; // [F13]
 import { EMPTY_ADDRESS, toShippingPayload, validateAddress } from '../lib/addressValidation.js';
 import { shippingFee } from '../lib/shipping.js';
 import { useAuth } from '../context/AuthContext.jsx';
@@ -40,7 +45,7 @@ const validate = (values, choice) => {
 };
 
 const formatSavedAddress = (address) =>
-  [address.street, address.ward, address.district, address.province].join(', ');
+  [address.street, address.ward, address.district, address.province].filter(Boolean).join(', ');
 
 function CheckoutSkeleton() {
   return (
@@ -70,7 +75,7 @@ function Section({ step, title, children }) {
 }
 
 export default function CheckoutPage() {
-  const { user } = useAuth();
+  const { user, initializing } = useAuth();
   const navigate = useNavigate();
   const queryClient = useQueryClient();
   const { cart, isPending: cartPending, isMerging, isError: cartError, error, refetch } = useCart();
@@ -80,6 +85,8 @@ export default function CheckoutPage() {
   const [problems, setProblems] = useState([]);
   // Địa chỉ đang chọn: id địa chỉ đã lưu hoặc "new"; null nghĩa là chưa chọn, dùng địa chỉ mặc định
   const [selected, setSelected] = useState(null);
+  // [F13] Mã của lần đặt này (khách không đăng nhập): bấm đúp hay thử lại sau khi mất mạng không tạo hai đơn
+  const [requestId] = useState(newRequestId);
 
   useEffect(() => {
     document.title = 'Đặt hàng - TechStore';
@@ -91,6 +98,7 @@ export default function CheckoutPage() {
   const addresses = useQuery({
     queryKey: ['addresses'],
     queryFn: () => api.get('/users/me/addresses').then((res) => res.data),
+    enabled: Boolean(user), // khách không đăng nhập không có sổ địa chỉ
   });
   const saved = addresses.data ?? [];
 
@@ -100,6 +108,7 @@ export default function CheckoutPage() {
 
   const fee = shippingFee(cart.subtotal);
   const total = cart.subtotal + fee;
+  const points = calculatePoints(cart.subtotal); // BR-15: điểm đơn này được khi hoàn thành (chỉ thành viên)
 
   const submit = async (values) => {
     setProblems([]);
@@ -108,9 +117,21 @@ export default function CheckoutPage() {
     if (values.note.trim()) body.note = values.note.trim();
 
     try {
-      const { data: order } = await api.post('/orders', body);
-      // Giỏ đã được backend xóa; làm trống cache để mọi nơi (biểu tượng giỏ, trang giỏ) cập nhật ngay
-      queryClient.setQueryData(['cart', user.id], EMPTY_CART);
+      let order;
+      if (user) {
+        ({ data: order } = await api.post('/orders', body));
+        // Giỏ đã được backend xóa; làm trống cache để mọi nơi (biểu tượng giỏ, trang giỏ) cập nhật ngay
+        queryClient.setQueryData(['cart', user.id], EMPTY_CART);
+      } else {
+        // [F13] Khách không đăng nhập: gửi giỏ lưu trên trình duyệt; đặt xong thì dọn giỏ và nhớ số điện thoại để xem đơn
+        ({ data: order } = await api.post('/orders/guest', {
+          ...body,
+          items: cart.items.map(({ productId, quantity }) => ({ productId, quantity })),
+          requestId,
+        }));
+        rememberGuestOrder(order.code, order.phone);
+        clearGuestItems();
+      }
       navigate(`/don-hang/${order.code}`, { state: { justPlaced: true }, replace: true });
     } catch (err) {
       setProblems(err.response?.data?.error?.details?.items ?? []);
@@ -120,7 +141,9 @@ export default function CheckoutPage() {
     }
   };
 
-  if (cartPending || isMerging || addresses.isPending) return <CheckoutSkeleton />;
+  if (initializing || cartPending || isMerging || (user && addresses.isPending)) {
+    return <CheckoutSkeleton />;
+  }
 
   if (cartError) {
     return (
@@ -162,7 +185,13 @@ export default function CheckoutPage() {
         noValidate
       >
         <div className="space-y-6">
-          <Section step={1} title="Địa chỉ giao hàng">
+          <Section step={1} title={user ? 'Địa chỉ giao hàng' : 'Thông tin giao hàng'}>
+            {!user && (
+              <p className="rounded-xl bg-brand-50 p-3 text-sm text-brand-700">
+                Bạn đang đặt hàng không cần tài khoản. Hãy nhớ mã đơn và số điện thoại bên dưới để
+                tra cứu đơn sau này.
+              </p>
+            )}
             {addresses.isError && (
               <p role="status" className="text-sm text-slate-600">
                 Không tải được sổ địa chỉ của bạn, hãy nhập địa chỉ giao hàng bên dưới.
@@ -224,7 +253,7 @@ export default function CheckoutPage() {
                 <FormField label="Tên người nhận" {...form.bind('recipientName')} />
                 <FormField label="Số điện thoại người nhận" type="tel" {...form.bind('phone')} />
                 <FormField label="Tỉnh/Thành phố" {...form.bind('province')} />
-                <FormField label="Quận/Huyện" {...form.bind('district')} />
+                <FormField label="Quận/Huyện (nếu có)" {...form.bind('district')} />
                 <FormField label="Phường/Xã" {...form.bind('ward')} />
                 <FormField label="Số nhà, tên đường" {...form.bind('street')} />
               </div>
@@ -317,6 +346,26 @@ export default function CheckoutPage() {
               </Link>
             </p>
           )}
+
+          {/* [F13] BR-15: thành viên được tích điểm, khách không đăng nhập thì được mời đăng nhập */}
+          {points > 0 &&
+            (user ? (
+              <p className="rounded-xl bg-emerald-50 p-3 text-sm font-medium text-emerald-800">
+                Bạn sẽ nhận {points} điểm thành viên khi đơn hoàn thành.
+              </p>
+            ) : (
+              <p className="rounded-xl bg-slate-100 p-3 text-sm text-slate-700">
+                Đơn này sẽ được {points} điểm nếu bạn là thành viên. Muốn tích điểm?{' '}
+                <Link
+                  to="/dang-nhap"
+                  state={{ from: { pathname: '/dat-hang' } }}
+                  className="font-semibold text-brand-600 hover:underline"
+                >
+                  đăng nhập
+                </Link>{' '}
+                trước khi đặt (giỏ hàng được giữ nguyên).
+              </p>
+            ))}
 
           {form.serverError && <Alert>{form.serverError}</Alert>}
           {problems.length > 0 && (

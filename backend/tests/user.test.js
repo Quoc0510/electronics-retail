@@ -163,6 +163,40 @@ describe('Sổ địa chỉ (US-04 AC3)', () => {
     expect(res.body.province).toBe('TP. Hồ Chí Minh');
   });
 
+  it('quận/huyện không bắt buộc: lưu được khi thiếu hoặc rỗng, sửa thành rỗng thì xóa, không gửi thì giữ nguyên', async () => {
+    const { auth } = await signIn();
+
+    const absent = await request(app)
+      .post('/api/users/me/addresses')
+      .set(auth)
+      .send({ ...address, district: undefined });
+    const blank = await request(app)
+      .post('/api/users/me/addresses')
+      .set(auth)
+      .send({ ...address, district: '  ' });
+    const patchOther = await request(app)
+      .patch(`/api/users/me/addresses/${blank.body.id}`)
+      .set(auth)
+      .send({ street: '9 Lê Lợi' });
+    const created = await request(app).post('/api/users/me/addresses').set(auth).send(address);
+    const keep = await request(app)
+      .patch(`/api/users/me/addresses/${created.body.id}`)
+      .set(auth)
+      .send({ street: '8 Lê Lợi' });
+    const cleared = await request(app)
+      .patch(`/api/users/me/addresses/${created.body.id}`)
+      .set(auth)
+      .send({ district: '' });
+
+    expect(absent.status).toBe(201);
+    expect(absent.body.district).toBeNull();
+    expect(blank.status).toBe(201);
+    expect(blank.body.district).toBeNull();
+    expect(patchOther.body.district).toBeNull();
+    expect(keep.body.district).toBe('Quận 1'); // không gửi quận/huyện thì không đụng tới
+    expect(cleared.body.district).toBeNull();
+  });
+
   it('không bỏ được cờ mặc định trực tiếp (luôn còn một địa chỉ mặc định)', async () => {
     const { auth } = await signIn();
     const created = await request(app).post('/api/users/me/addresses').set(auth).send(address);

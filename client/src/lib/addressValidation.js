@@ -17,7 +17,6 @@ export const EMPTY_ADDRESS = {
 const REQUIRED_FIELDS = {
   recipientName: 'Vui lòng nhập tên người nhận',
   province: 'Vui lòng nhập tỉnh/thành phố',
-  district: 'Vui lòng nhập quận/huyện',
   ward: 'Vui lòng nhập phường/xã',
   street: 'Vui lòng nhập số nhà, tên đường',
 };

@@ -1,10 +1,17 @@
 /**
- * @feature [F00][F01][F04] Trang tổng quan của Admin: số liệu nhanh (sản phẩm, danh mục, thương hiệu), lối tắt thao tác
+ * @feature [F00][F01][F04][F07] Trang tổng quan của Admin: số liệu nhanh (sản phẩm, danh mục, thương hiệu), lối tắt thao tác
  * và trạng thái kết nối máy chủ. Thống kê doanh thu, đơn hàng sẽ được làm ở F10.
  */
 import { Link } from 'react-router-dom';
 import { useQuery } from '@tanstack/react-query';
-import { IconArrowRight, IconBox, IconGrid, IconLayers, IconPlus } from '@techstore/shared';
+import {
+  IconArrowRight,
+  IconBag,
+  IconBox,
+  IconGrid,
+  IconLayers,
+  IconPlus,
+} from '@techstore/shared';
 import { api } from '../lib/api.js';
 import { useAuth } from '../context/AuthContext.jsx';
 import PageHeader from '../components/PageHeader.jsx';
@@ -43,6 +50,14 @@ export default function DashboardPage() {
     queryFn: () =>
       api.get('/admin/products', { params: { pageSize: 1 } }).then((res) => res.data.total),
   });
+  // [F07] Số đơn đang chờ xác nhận: lấy tổng (total) của trang đầu với pageSize=1
+  const pendingOrders = useQuery({
+    queryKey: ['/admin/orders', 'pending-count'],
+    queryFn: () =>
+      api
+        .get('/admin/orders', { params: { status: 'PENDING', pageSize: 1 } })
+        .then((res) => res.data.total),
+  });
   const categories = useQuery({
     queryKey: ['/admin/categories', 'all'],
     queryFn: () => api.get('/admin/categories').then((res) => res.data),
@@ -78,7 +93,14 @@ export default function DashboardPage() {
         </span>
       </PageHeader>
 
-      <div className="grid gap-4 sm:grid-cols-2 xl:grid-cols-3">
+      <div className="grid gap-4 sm:grid-cols-2 xl:grid-cols-4">
+        <StatCard
+          label="Đơn chờ xác nhận"
+          value={pendingOrders.data}
+          Icon={IconBag}
+          tone="from-amber-500 to-orange-600"
+          to="/don-hang"
+        />
         <StatCard
           label="Sản phẩm"
           value={products.data}

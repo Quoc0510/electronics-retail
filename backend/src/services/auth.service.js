@@ -23,6 +23,7 @@ export const toPublicUser = (user) => ({
   fullName: user.fullName,
   phone: user.phone,
   role: user.role,
+  points: user.points, // [F13] điểm thành viên (BR-15)
   createdAt: user.createdAt,
 });
 

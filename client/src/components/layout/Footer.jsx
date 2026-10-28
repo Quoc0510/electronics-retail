@@ -1,5 +1,5 @@
 /**
- * @feature [F04][F12] Chân trang: giới thiệu, lối tắt mua sắm, hỗ trợ (hỏi đáp, chính sách), liên hệ và cam kết dịch vụ.
+ * @feature [F04][F12][F13] Chân trang: giới thiệu, lối tắt mua sắm, hỗ trợ (hỏi đáp, chính sách), liên hệ và cam kết dịch vụ.
  * Nội dung dịch vụ khớp quy tắc nghiệp vụ của hệ thống (BR-05 miễn phí giao từ 5.000.000 đ, BR-08 thanh toán khi nhận hàng).
  */
 import { Link } from 'react-router-dom';
@@ -73,6 +73,11 @@ export default function Footer() {
         <nav aria-label="Hỗ trợ">
           <h2 className={headingClass}>Hỗ trợ</h2>
           <ul className="space-y-2 text-sm">
+            <li>
+              <Link to="/tra-cuu-don-hang" className={linkClass}>
+                Tra cứu đơn hàng
+              </Link>
+            </li>
             <li>
               <Link to="/gioi-thieu" className={linkClass}>
                 Giới thiệu

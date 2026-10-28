@@ -155,7 +155,7 @@ const findVisibleProduct = async (productId) => {
 };
 
 // Gộp các mục trùng sản phẩm (cộng số lượng, tối đa MAX_LINE_QUANTITY) và giữ nguyên thứ tự xuất hiện đầu tiên
-const mergeDuplicates = (entries) => {
+export const mergeDuplicates = (entries) => {
   const totals = new Map();
   for (const { productId, quantity } of entries) {
     totals.set(productId, Math.min((totals.get(productId) ?? 0) + quantity, MAX_LINE_QUANTITY));
