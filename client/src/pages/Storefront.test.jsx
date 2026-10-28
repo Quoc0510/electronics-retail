@@ -540,7 +540,9 @@ describe('Trang chi tiết sản phẩm (US-13)', () => {
   it('hết hàng thì hiện Hết hàng (AC2)', async () => {
     await open(detail({ inStock: false }));
 
-    expect(screen.getByText('Hết hàng')).toBeInTheDocument();
+    // Nhãn tình trạng và nút mua (bị khóa) đều ghi "Hết hàng"
+    expect(screen.getAllByText('Hết hàng')).toHaveLength(2);
+    expect(screen.getByRole('button', { name: 'Hết hàng' })).toBeDisabled();
     expect(screen.queryByText('Còn hàng')).not.toBeInTheDocument();
   });
 

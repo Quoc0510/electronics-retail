@@ -3,7 +3,7 @@
  * Nội dung dịch vụ khớp quy tắc nghiệp vụ của hệ thống (BR-05 miễn phí giao từ 5.000.000 đ, BR-08 thanh toán khi nhận hàng).
  */
 import { Link } from 'react-router-dom';
-import { IconClock, IconMail, IconMapPin, IconPhone, Logo } from '@techstore/shared';
+import { IconClock, IconMail, IconMapPin, IconPhone, Logo, ThemeToggle } from '@techstore/shared';
 import { POLICIES } from '../../lib/policies.js';
 import { STORE, TEAM } from '../../lib/storeInfo.js';
 
@@ -111,6 +111,10 @@ export default function Footer() {
       <div className="border-t border-white/10">
         <div className="mx-auto max-w-7xl space-y-2 px-4 py-5 text-center text-xs text-slate-500">
           <p>© 2026 TechStore · Đồ án môn học Công nghệ phần mềm</p>
+          {/* Trên điện thoại nút này không nằm ở đầu trang (hết chỗ) nên đặt thêm ở đây */}
+          <div className="flex justify-center sm:hidden">
+            <ThemeToggle className="border border-white/15 text-slate-300 hover:bg-white/10" />
+          </div>
           <ul
             aria-label="Sinh viên thực hiện"
             className="flex flex-wrap items-center justify-center gap-x-6 gap-y-1 text-slate-400"

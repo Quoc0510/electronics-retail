@@ -25,7 +25,10 @@ export const session = { user: customer, accessToken: 'access-1', refreshToken: 
 export const mockServer = (handlers) => mockServerFor(api, handlers);
 
 // [F04] Trang chủ gọi danh mục và danh sách sản phẩm; các test không quan tâm tới trang chủ dùng bộ trả lời rỗng này
+export const emptyCart = { items: [], totalQuantity: 0, subtotal: 0, canCheckout: false };
+
 export const storefrontApi = {
+  'GET /cart': [200, emptyCart], // [F05] đầu trang tải giỏ khi đã đăng nhập
   'GET /categories': [200, []],
   'GET /products': [200, { items: [], page: 1, pageSize: 12, total: 0 }],
 };

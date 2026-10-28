@@ -342,9 +342,12 @@ describe('Nút đổi chế độ sáng/tối trên đầu trang', () => {
     document.documentElement.dataset.theme = 'light';
     open('/');
 
-    await userEvent.click(screen.getByRole('button', { name: 'Chuyển sang chế độ tối' }));
+    // Có hai nút: ở đầu trang (màn hình rộng) và ở chân trang (điện thoại), luôn đồng bộ với nhau
+    const toggles = screen.getAllByRole('button', { name: 'Chuyển sang chế độ tối' });
+    expect(toggles).toHaveLength(2);
+    await userEvent.click(toggles[0]);
 
     expect(document.documentElement.dataset.theme).toBe('dark');
-    expect(screen.getByRole('button', { name: 'Chuyển sang chế độ sáng' })).toBeInTheDocument();
+    expect(screen.getAllByRole('button', { name: 'Chuyển sang chế độ sáng' })).toHaveLength(2);
   });
 });

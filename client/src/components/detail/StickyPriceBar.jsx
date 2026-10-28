@@ -8,7 +8,7 @@ import { assetUrl } from '../../lib/api.js';
 import { useCompare } from '../../context/CompareContext.jsx'; // [F12]
 import Price from '../Price.jsx';
 
-export default function StickyPriceBar({ anchorRef, product }) {
+export default function StickyPriceBar({ anchorRef, product, action = null }) {
   const [visible, setVisible] = useState(false);
   // [F12] Thanh so sánh (cao 4.5rem) đang hiện ở đáy thì nâng thanh giá lên phía trên nó
   const { items } = useCompare();
@@ -43,6 +43,8 @@ export default function StickyPriceBar({ anchorRef, product }) {
           {product.name}
         </p>
         <Price price={product.price} salePrice={product.salePrice} showPercent={false} />
+        {/* [F05] Nút "Thêm vào giỏ" do trang chi tiết truyền vào */}
+        {action}
       </div>
     </div>
   );

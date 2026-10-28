@@ -378,6 +378,40 @@ Quyết định thiết kế F04:
 - Chi tiết dùng **slug** (không dùng id) để đường dẫn dễ đọc, chia sẻ được.
 - Hạn chế đã biết của tìm kiếm: chưa bỏ dấu tiếng Việt (gõ "dien thoai" không ra "Điện thoại"), xem [TECH_DEBT.md](TECH_DEBT.md).
 
+### F05 - Giỏ hàng (cần đăng nhập, BR-11)
+
+| Method | Đường dẫn           | Mô tả                                                         | User story |
+| ------ | ------------------- | ------------------------------------------------------------- | ---------- |
+| GET    | /api/cart           | Giỏ của người dùng (tạo nếu chưa có) đã tính lại tổng tiền    | US-14      |
+| POST   | /api/cart/items     | `{ productId, quantity = 1 }`: thêm, đã có thì cộng dồn       | US-14      |
+| PATCH  | /api/cart/items/:id | `{ quantity }`: đặt số lượng mới của một dòng (1 đến tồn kho) | US-15      |
+| DELETE | /api/cart/items/:id | Xóa một dòng khỏi giỏ                                         | US-15      |
+
+Mọi thao tác đều trả về **toàn bộ giỏ** để giao diện cập nhật ngay:
+
+```
+{ items: [{ id, productId, quantity, product: { name, slug, price, salePrice, thumbnail, brand, category },
+            unitPrice, lineTotal, stock, status }],
+  totalQuantity, subtotal, canCheckout }
+```
+
+- `unitPrice` là giá bán hiện hành (BR-02: giá khuyến mãi nếu có). `stock` là số còn lại trong kho, trả riêng cho chủ giỏ để giới hạn ô số lượng và báo "chỉ còn n" (US-14 AC3).
+- `status` của từng dòng: `OK`, `UNAVAILABLE` (sản phẩm, danh mục hoặc thương hiệu đã ẩn), `OUT_OF_STOCK`, `EXCEEDS_STOCK` (tồn kho giảm xuống dưới số lượng trong giỏ).
+- `subtotal` chỉ cộng các dòng `OK`. `canCheckout` chỉ đúng khi giỏ không rỗng và mọi dòng đều `OK` (F06 dựa vào đây).
+- `totalQuantity` cộng số lượng của mọi dòng, dùng cho biểu tượng giỏ ở đầu trang (US-14 AC4).
+
+Mã lỗi thêm: `PRODUCT_NOT_FOUND`, `CART_ITEM_NOT_FOUND` (404); `INSUFFICIENT_STOCK`, `OUT_OF_STOCK`, `PRODUCT_UNAVAILABLE`, `CONFLICT` (409).
+
+Quyết định thiết kế F05:
+
+- **Không dùng bảng mới:** `Cart` (một giỏ cho mỗi người dùng, `userId` duy nhất) và `CartItem` (khóa duy nhất `cartId + productId`) đã có từ giai đoạn thiết kế CSDL, nên F05 không cần migration.
+- **Không vượt tồn kho kể cả khi nhiều request cùng lúc (BR-03):** cộng dồn bằng một câu `UPDATE ... WHERE quantity <= stock - n` có điều kiện nằm ngay trong câu lệnh, không "đọc rồi ghi". Hai request cùng tạo dòng mới thì request thua (trùng khóa duy nhất) tự thử lại như cộng dồn. Có test: tồn 3, gửi 6 request cùng lúc thì đúng 3 thành công.
+- **Chỉ thêm được sản phẩm khách đang thấy** (sản phẩm, danh mục, thương hiệu đều đang hiện). Sản phẩm ẩn trả 404 như không tồn tại để không lộ sự tồn tại của hàng đã ẩn.
+- **Dòng của người khác trả 404**, không phải 403, để không lộ id dòng của giỏ khác (kiểm tra quyền sở hữu ngay trong truy vấn).
+- **Giỏ hàng không giữ chỗ tồn kho:** tồn kho có thể đổi sau khi thêm, nên mỗi dòng có `status` và việc kiểm tra bắt buộc cuối cùng nằm ở lúc đặt hàng (F06). Giá luôn lấy hiện tại, giỏ không lưu giá cũ (BR-04 chỉ áp dụng cho đơn hàng).
+- Giới hạn 99 sản phẩm mỗi dòng để chặn số vô lý trước khi chạm CSDL.
+- `clearCart(userId, db)` sẵn sàng cho F06 xóa giỏ trong cùng transaction với việc tạo đơn.
+
 ### Quyết định bảo mật của F01
 
 - Access token JWT sống 15 phút; refresh token là chuỗi ngẫu nhiên 256 bit sống 7 ngày, DB chỉ lưu bản băm SHA-256.
@@ -545,3 +579,19 @@ Thương hiệu nổi bật, banner đôi (chỉ hiện nếu danh mục tương
 ### Ảnh sản phẩm thật
 
 Ảnh do quản trị viên tải lên ở Admin hiển thị bằng `object-contain` trên nền trắng (không cắt xén ảnh nhiều tỉ lệ). Ảnh SVG mẫu của seed là hình vuông nên vẫn lấp đầy ô.
+
+## 14. Giao diện giỏ hàng F05 (Client)
+
+| Thành phần                 | Vai trò                                                                                                                                                                                                                                                                                                   |
+| -------------------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `useCart`                  | Truy vấn giỏ bằng React Query với khóa `['cart', userId]` (đổi tài khoản không thấy giỏ người trước; chưa đăng nhập thì không gọi API). Mỗi thao tác ghi thẳng giỏ máy chủ trả về vào cache nên biểu tượng giỏ, trang giỏ và nút thêm luôn cùng một dữ liệu                                               |
+| `AddToCartButton`          | Nút "Thêm vào giỏ" (thẻ sản phẩm dạng biểu tượng, trang chi tiết và thanh giá dính dạng đầy đủ). Chưa đăng nhập thì chuyển tới đăng nhập rồi quay lại đúng trang (US-14 AC1); hết hàng thì khóa; thành công đổi thành "Đã thêm" 2 giây; lỗi hiện đúng thông báo của máy chủ (vượt tồn kho kèm số còn lại) |
+| `QuantityStepper`          | Nút − / ô nhập / nút +, tối thiểu 1, tối đa theo tồn kho; gõ số sai được đưa về giá trị hợp lệ thay vì gửi lên máy chủ                                                                                                                                                                                    |
+| `CartPage` (`/gio-hang`)   | Danh sách dòng, tóm tắt đơn hàng, phí vận chuyển ước tính (BR-05) kèm thanh tiến độ "mua thêm ... để được miễn phí", trạng thái dòng, giỏ trống, khung chờ, lỗi và Thử lại                                                                                                                                |
+| Biểu tượng giỏ ở đầu trang | Hiện tổng số lượng (hiện "99+" khi quá lớn); chưa đăng nhập thì dẫn tới trang đăng nhập (US-14 AC4)                                                                                                                                                                                                       |
+
+- Dòng có vấn đề (`UNAVAILABLE`, `OUT_OF_STOCK`, `EXCEEDS_STOCK`) được viền đỏ kèm thông báo; `EXCEEDS_STOCK` có nút "Giảm xuống n" một cú bấm. Các dòng này không vào tổng tiền (US-15 AC4).
+- Khi một thao tác bị máy chủ từ chối (ví dụ vượt tồn kho), ô số lượng được tạo lại để quay về số lượng thật, tránh hiện số mà giỏ không có.
+- Phí vận chuyển ở `lib/shipping.js` là **ước tính**; giá trị cuối cùng do backend tính khi đặt hàng (F06). Hai nơi cùng áp BR-05 nên nếu quy tắc đổi phải sửa cả hai.
+- Nút "Đặt hàng" đang bị khóa kèm ghi chú "sắp ra mắt" cho tới khi làm F06.
+- Trên điện thoại hẹp, nút đổi giao diện sáng/tối chuyển xuống chân trang để đầu trang chứa vừa biểu tượng giỏ trên một hàng.
