@@ -1,11 +1,12 @@
 /**
- * @feature [F01][F04] Khung chung của mọi trang: thanh đầu trang tối cố định khi cuộn (logo, tìm kiếm, tài khoản),
+ * @feature [F01][F04][F05] Khung chung của mọi trang: thanh đầu trang tối cố định khi cuộn (logo, tìm kiếm, tài khoản),
  * thanh danh mục, nội dung và chân trang.
  * Trên điện thoại ô tìm kiếm xuống dòng riêng (order) để không bị chật.
  */
 import { useEffect } from 'react';
 import { Link, Outlet, useLocation } from 'react-router-dom';
-import { IconCompare, Logo, ThemeToggle } from '@techstore/shared';
+import { IconBag, IconCompare, Logo, ThemeToggle } from '@techstore/shared';
+import { useCart } from '../hooks/useCart.js'; // [F05]
 import { useCompare } from '../context/CompareContext.jsx'; // [F12]
 import CompareBar from './compare/CompareBar.jsx'; // [F12]
 import AccountMenu from './layout/AccountMenu.jsx';
@@ -17,6 +18,7 @@ import SearchBox from './SearchBox.jsx';
 
 function Header() {
   const { items } = useCompare();
+  const { totalQuantity } = useCart();
   return (
     <header className="surface-dark sticky top-0 z-40 bg-ink-900/95 text-white shadow-lg backdrop-blur">
       <UtilityBar />
@@ -47,7 +49,24 @@ function Header() {
               </span>
             )}
           </Link>
-          <ThemeToggle className="!h-9 !w-9 text-slate-200 hover:bg-white/10 hover:text-white sm:!h-10 sm:!w-10" />
+          {/* [F05] Biểu tượng giỏ hàng kèm tổng số lượng (US-14 AC4); chưa đăng nhập thì dẫn tới đăng nhập */}
+          <Link
+            to="/gio-hang"
+            aria-label={`Giỏ hàng (${totalQuantity})`}
+            className="relative flex h-9 w-9 items-center justify-center rounded-full text-slate-200 transition hover:bg-white/10 hover:text-white sm:h-10 sm:w-10"
+          >
+            <IconBag size={20} />
+            {totalQuantity > 0 && (
+              <span
+                aria-hidden="true"
+                className="absolute -right-0.5 -top-0.5 flex h-4 min-w-4 items-center justify-center rounded-full bg-rose-500 px-1 text-[0.65rem] font-bold text-white"
+              >
+                {totalQuantity > 99 ? '99+' : totalQuantity}
+              </span>
+            )}
+          </Link>
+          {/* Điện thoại hẹp: nút đổi giao diện chuyển xuống chân trang để đầu trang vừa một hàng */}
+          <ThemeToggle className="hidden text-slate-200 hover:bg-white/10 hover:text-white sm:flex" />
           <AccountMenu />
         </div>
       </div>

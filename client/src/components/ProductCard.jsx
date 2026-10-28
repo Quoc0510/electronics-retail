@@ -8,6 +8,7 @@
 import { Link } from 'react-router-dom';
 import { IconArrowRight, discountPercent } from '@techstore/shared';
 import { assetUrl } from '../lib/api.js';
+import AddToCartButton from './cart/AddToCartButton.jsx'; // [F05]
 import CompareButton from './compare/CompareButton.jsx';
 import Price from './Price.jsx';
 
@@ -53,7 +54,7 @@ export default function ProductCard({ product }) {
           <h3 className="line-clamp-2 min-h-10 text-sm font-semibold leading-5 text-slate-900 transition group-hover:text-brand-700">
             {product.name}
           </h3>
-          <div className="mt-auto pt-2">
+          <div className="mt-auto pr-12 pt-2">
             <Price price={product.price} salePrice={product.salePrice} showPercent={false} />
           </div>
           <span className="flex items-center gap-1 text-xs font-medium text-brand-600 opacity-0 transition group-hover:opacity-100 group-focus-within:opacity-100">
@@ -62,6 +63,12 @@ export default function ProductCard({ product }) {
         </div>
       </Link>
       <CompareButton product={product} className="absolute right-3 top-3 z-10" />
+      {/* [F05] Thêm nhanh 1 sản phẩm vào giỏ */}
+      <AddToCartButton
+        product={product}
+        variant="icon"
+        className="absolute bottom-4 right-4 z-10"
+      />
     </div>
   );
 }

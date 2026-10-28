@@ -4,7 +4,7 @@
  * thanh giá dính khi cuộn. Sản phẩm không tồn tại, đã ẩn hoặc thuộc danh mục/thương hiệu bị ẩn đều hiện trang
  * "không tìm thấy" (AC3). Nút "Thêm vào giỏ" sẽ được đặt cạnh khối giá khi làm F05.
  */
-import { useEffect, useRef } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import { Link, useParams } from 'react-router-dom';
 import { useQuery } from '@tanstack/react-query';
 import {
@@ -21,6 +21,8 @@ import {
 } from '@techstore/shared';
 import { api } from '../lib/api.js';
 import ProductGallery from '../components/detail/ProductGallery.jsx';
+import AddToCartButton from '../components/cart/AddToCartButton.jsx'; // [F05]
+import QuantityStepper from '../components/cart/QuantityStepper.jsx'; // [F05]
 import CompareButton from '../components/compare/CompareButton.jsx'; // [F12]
 import StickyPriceBar from '../components/detail/StickyPriceBar.jsx';
 import { pushRecent } from '../lib/recentlyViewed.js'; // [F12]
@@ -112,6 +114,8 @@ function RelatedProducts({ product }) {
 
 export default function ProductDetailPage() {
   const { slug } = useParams();
+  // [F05] Số lượng muốn thêm vào giỏ (máy chủ kiểm tra tồn kho khi thêm)
+  const [quantity, setQuantity] = useState(1);
   const priceRef = useRef(null);
 
   const {
@@ -226,7 +230,18 @@ export default function ProductDetailPage() {
                 Bạn tiết kiệm {formatVnd(saving)}
               </p>
             )}
-            {/* [F12] Chỗ đặt nút "Thêm vào giỏ" (F05) sẽ nằm cạnh nút so sánh này */}
+            {/* [F05] Số lượng và nút thêm vào giỏ */}
+            <div className="flex flex-wrap items-start gap-3">
+              {product.inStock && (
+                <QuantityStepper
+                  key={quantity}
+                  value={quantity}
+                  onChange={setQuantity}
+                  label={product.name}
+                />
+              )}
+              <AddToCartButton product={product} quantity={quantity} className="min-w-52 flex-1" />
+            </div>
             <CompareButton product={product} variant="pill" />
             <ul className="space-y-2 border-t border-brand-100 pt-4 text-sm text-slate-700">
               {PERKS.map(({ Icon, text }) => (
@@ -278,7 +293,11 @@ export default function ProductDetailPage() {
 
       <RelatedProducts product={product} />
 
-      <StickyPriceBar anchorRef={priceRef} product={product} />
+      <StickyPriceBar
+        anchorRef={priceRef}
+        product={product}
+        action={<AddToCartButton product={product} quantity={quantity} className="w-44 shrink-0" />}
+      />
     </div>
   );
 }
