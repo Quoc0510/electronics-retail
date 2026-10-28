@@ -33,11 +33,15 @@ export default function OrdersPage() {
   // Chờ người dùng ngừng gõ 300ms mới tìm; đổi từ khóa thì về trang 1
   useEffect(() => {
     const timer = setTimeout(() => {
-      setSearch(searchInput.trim());
-      setPage(1);
+      const next = searchInput.trim();
+      // Chỉ về trang 1 khi từ khóa thật sự đổi: nếu không, bấm "Trang sau" trong 300ms đầu sẽ bị giật về trang 1
+      if (next !== search) {
+        setSearch(next);
+        setPage(1);
+      }
     }, 300);
     return () => clearTimeout(timer);
-  }, [searchInput]);
+  }, [searchInput, search]);
 
   const params = {
     page,

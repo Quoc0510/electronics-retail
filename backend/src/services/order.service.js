@@ -16,6 +16,7 @@
  */
 import { Prisma } from '@prisma/client';
 import { prisma } from '../lib/prisma.js';
+import { escapeLike } from '../lib/like.js';
 import { generateOrderCode } from '../lib/orderCode.js';
 import { ORDER_STATUSES, allowedNext, canTransition } from '../lib/orderStatus.js'; // [F07]
 import { calculatePoints } from '../lib/points.js'; // [F13]
@@ -551,9 +552,6 @@ const toAdminOrderDto = (order) => ({
       : null,
   })),
 });
-
-// "%" và "_" là ký tự đặc biệt của LIKE; gõ "50%" thì phải tìm đúng chuỗi "50%" (Prisma `contains` không tự thoát chúng)
-const escapeLike = (text) => text.replace(/[\\%_]/g, '\\$&');
 
 // Id các đơn khớp từ khóa (mã đơn, tên hoặc số điện thoại người nhận), không phân biệt hoa thường
 const searchOrderIds = async (search) => {

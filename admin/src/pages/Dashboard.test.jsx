@@ -1,5 +1,5 @@
 /**
- * @feature [F00][F04] Kiểm thử trang tổng quan và khung chung (thanh bên, ngăn kéo menu) của Admin.
+ * @feature [F00][F04][F10] Kiểm thử trang tổng quan và khung chung (thanh bên, ngăn kéo menu) của Admin.
  */
 import { afterEach, describe, expect, it } from 'vitest';
 import { screen, within } from '@testing-library/react';
@@ -7,8 +7,22 @@ import userEvent from '@testing-library/user-event';
 import { tokenStorage } from '../lib/api.js';
 import { admin, adminSession, apiError, mockServer, renderApp } from '../test/utils.jsx';
 
+const emptyStats = {
+  days: 30,
+  summary: { revenue: 0, completedOrders: 0, pendingOrders: 0, customers: 0 },
+  revenueByDay: Array.from({ length: 30 }, (_, i) => ({
+    date: `2026-10-${String(i + 1).padStart(2, '0')}`,
+    revenue: 0,
+    orders: 0,
+  })),
+  ordersByStatus: { PENDING: 0, CONFIRMED: 0, SHIPPING: 0, COMPLETED: 0, CANCELLED: 0 },
+  topProducts: [],
+  lowStock: { threshold: 5, total: 0, items: [] },
+};
+
 const overview = {
   'GET /users/me': [200, admin],
+  'GET /admin/stats': [200, emptyStats],
   'GET /health': [200, { status: 'ok' }],
   'GET /admin/products': [200, { items: [], page: 1, pageSize: 1, total: 42 }],
   'GET /admin/categories': [200, [{ id: 1 }, { id: 2 }, { id: 3 }]],
@@ -88,7 +102,7 @@ describe('Khung quản trị', () => {
     open('/danh-muc', { ...overview, 'GET /admin/categories': [200, []] });
 
     const nav = await screen.findByRole('navigation', { name: 'Menu quản trị' });
-    for (const label of ['Tổng quan', 'Danh mục', 'Thương hiệu', 'Sản phẩm']) {
+    for (const label of ['Tổng quan', 'Danh mục', 'Thương hiệu', 'Sản phẩm', 'Người dùng']) {
       expect(within(nav).getByRole('link', { name: label })).toBeInTheDocument();
     }
     expect(within(nav).getByRole('link', { name: 'Danh mục' })).toHaveAttribute(

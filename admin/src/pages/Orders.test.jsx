@@ -583,24 +583,29 @@ describe('Đơn của khách không đăng nhập (F13)', () => {
 });
 
 describe('Trang tổng quan: đơn chờ xác nhận', () => {
-  it('hiện số đơn chờ xác nhận (lấy tổng bằng pageSize=1) và dẫn tới danh sách đơn', async () => {
+  it('hiện số đơn chờ xác nhận (lấy từ thống kê) và dẫn tới danh sách đơn', async () => {
     signIn();
-    const paramsLog = [];
     mockServer({
       ...base,
       'GET /admin/products': [200, { items: [], page: 1, pageSize: 1, total: 4 }],
       'GET /admin/categories': [200, []],
       'GET /admin/brands': [200, []],
-      'GET /admin/orders': (config) => {
-        paramsLog.push(config.params);
-        return [200, page([], { total: 7 })];
-      },
+      'GET /admin/stats': [
+        200,
+        {
+          days: 30,
+          summary: { revenue: 0, completedOrders: 0, pendingOrders: 7, customers: 0 },
+          revenueByDay: [],
+          ordersByStatus: { PENDING: 7, CONFIRMED: 0, SHIPPING: 0, COMPLETED: 0, CANCELLED: 0 },
+          topProducts: [],
+          lowStock: { threshold: 5, total: 0, items: [] },
+        },
+      ],
     });
     renderApp('/');
 
     const card = await screen.findByRole('link', { name: /Đơn chờ xác nhận/ });
     expect(await within(card).findByText('7')).toBeInTheDocument();
     expect(card).toHaveAttribute('href', '/don-hang');
-    expect(paramsLog[0]).toEqual({ status: 'PENDING', pageSize: 1 });
   });
 });
