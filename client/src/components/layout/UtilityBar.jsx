@@ -1,6 +1,6 @@
 /**
- * @feature [F12] Thanh tiện ích trên cùng của đầu trang (chỉ hiện từ màn hình vừa trở lên):
- * hotline, giờ làm việc bên trái; lối tắt tới các trang thông tin bên phải.
+ * @feature [F12][F13] Thanh tiện ích trên cùng của đầu trang (chỉ hiện từ màn hình vừa trở lên):
+ * hotline, giờ làm việc bên trái; lối tắt tới tra cứu đơn hàng (khách không đăng nhập) và các trang thông tin bên phải.
  */
 import { Link } from 'react-router-dom';
 import { IconClock, IconPhone } from '@techstore/shared';
@@ -22,6 +22,11 @@ export default function UtilityBar() {
         </p>
         <nav aria-label="Thông tin cửa hàng">
           <ul className="flex items-center gap-5">
+            <li>
+              <Link to="/tra-cuu-don-hang" className="transition hover:text-white">
+                Tra cứu đơn hàng
+              </Link>
+            </li>
             {INFO_LINKS.map((link) => (
               <li key={link.to}>
                 <Link to={link.to} className="transition hover:text-white">

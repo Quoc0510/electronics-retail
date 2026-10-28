@@ -1,5 +1,5 @@
 /**
- * @feature [F01][F02][F03][F04] Khung chung của các trang Admin: thanh bên tối có menu và thông tin người dùng.
+ * @feature [F01][F02][F03][F04][F07] Khung chung của các trang Admin: thanh bên tối có menu và thông tin người dùng.
  * Trên màn hình rộng thanh bên luôn hiện; trên điện thoại nó là ngăn kéo mở bằng nút menu ở thanh trên cùng.
  * Các tính năng sau (F07 đơn hàng, F10 thống kê...) sẽ thêm mục vào MENU_ITEMS.
  */
@@ -7,6 +7,7 @@ import { useEffect, useState } from 'react';
 import { NavLink, Outlet, useLocation } from 'react-router-dom';
 import {
   Button,
+  IconBag,
   IconBox,
   IconClose,
   IconGrid,
@@ -21,6 +22,7 @@ import { useAuth } from '../context/AuthContext.jsx';
 
 const MENU_ITEMS = [
   { to: '/', label: 'Tổng quan', end: true, Icon: IconHome },
+  { to: '/don-hang', label: 'Đơn hàng', Icon: IconBag }, // [F07]
   { to: '/danh-muc', label: 'Danh mục', Icon: IconGrid }, // [F02]
   { to: '/thuong-hieu', label: 'Thương hiệu', Icon: IconLayers }, // [F02]
   { to: '/san-pham', label: 'Sản phẩm', Icon: IconBox }, // [F03]
@@ -44,7 +46,7 @@ export default function AdminLayout() {
   }, [pathname]);
 
   return (
-    <div className="min-h-screen lg:grid lg:grid-cols-[16.5rem_1fr]">
+    <div className="min-h-screen lg:grid lg:grid-cols-[16.5rem_1fr] print:block">
       {/* Nền mờ phía sau ngăn kéo trên điện thoại */}
       {menuOpen && (
         <div
@@ -55,7 +57,7 @@ export default function AdminLayout() {
       )}
 
       <aside
-        className={`surface-dark fixed inset-y-0 left-0 z-50 flex w-66 flex-col bg-ink-900 text-slate-300 transition-transform duration-200 lg:sticky lg:top-0 lg:h-screen lg:w-auto lg:translate-x-0 ${
+        className={`surface-dark print:hidden fixed inset-y-0 left-0 z-50 flex w-66 flex-col bg-ink-900 text-slate-300 transition-transform duration-200 lg:sticky lg:top-0 lg:h-screen lg:w-auto lg:translate-x-0 ${
           menuOpen ? 'translate-x-0' : '-translate-x-full'
         }`}
       >
@@ -119,7 +121,7 @@ export default function AdminLayout() {
 
       <div className="flex min-w-0 flex-col">
         {/* Thanh trên cùng chỉ hiện trên điện thoại: nút mở menu */}
-        <header className="sticky top-0 z-30 flex items-center gap-3 border-b border-slate-200 bg-white/90 px-4 py-3 backdrop-blur lg:hidden">
+        <header className="sticky top-0 z-30 flex items-center gap-3 border-b border-slate-200 bg-white/90 px-4 py-3 backdrop-blur lg:hidden print:hidden">
           <button
             type="button"
             aria-label="Mở menu"

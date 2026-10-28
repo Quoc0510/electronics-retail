@@ -133,7 +133,7 @@ const fillNewAddress = async (overrides = {}) => {
     'Tên người nhận': 'Trần Thị B',
     'Số điện thoại người nhận': '0987654321',
     'Tỉnh/Thành phố': 'Đà Nẵng',
-    'Quận/Huyện': 'Hải Châu',
+    'Quận/Huyện (nếu có)': 'Hải Châu',
     'Phường/Xã': 'Phường Thạch Thang',
     'Số nhà, tên đường': '99 Bạch Đằng',
     ...overrides,
@@ -149,11 +149,16 @@ const fillNewAddress = async (overrides = {}) => {
 // Trang đặt hàng
 // ---------------------------------------------------------------------------
 describe('Trang đặt hàng - hiển thị', () => {
-  it('chưa đăng nhập thì chuyển tới trang đăng nhập', async () => {
-    mockServer(storefrontApi);
+  it('chưa đăng nhập vẫn vào được trang đặt hàng, không bị chuyển tới đăng nhập (BR-11, F13)', async () => {
+    localStorage.setItem('techstore.guestCart', JSON.stringify([{ productId: 101, quantity: 2 }]));
+    mockServer({
+      ...storefrontApi,
+      'POST /cart/preview': [200, makeCart([line(1, { quantity: 2, lineTotal: 2000000 })])],
+    });
     renderApp('/dat-hang');
 
-    expect(await screen.findByLabelText('Mật khẩu')).toBeInTheDocument();
+    expect(await screen.findByRole('heading', { name: 'Đặt hàng', level: 1 })).toBeInTheDocument();
+    expect(screen.queryByLabelText('Mật khẩu')).not.toBeInTheDocument();
   });
 
   it('hiện khung chờ khi đang tải rồi hiện trang', async () => {
@@ -306,7 +311,8 @@ describe('Trang đặt hàng - địa chỉ giao hàng (AC1)', () => {
     expect(await screen.findByText('Vui lòng nhập tên người nhận')).toBeInTheDocument();
     expect(screen.getByText('Số điện thoại phải gồm 10 số và bắt đầu bằng 0')).toBeInTheDocument();
     expect(screen.getByText('Vui lòng nhập tỉnh/thành phố')).toBeInTheDocument();
-    expect(screen.getByText('Vui lòng nhập quận/huyện')).toBeInTheDocument();
+    // Quận/huyện không bắt buộc (nhiều địa phương đã bỏ cấp này)
+    expect(screen.queryByText('Vui lòng nhập quận/huyện')).not.toBeInTheDocument();
     expect(screen.getByText('Vui lòng nhập phường/xã')).toBeInTheDocument();
     expect(screen.getByText('Vui lòng nhập số nhà, tên đường')).toBeInTheDocument();
     expect(orders(calls)).toHaveLength(0);
@@ -505,7 +511,7 @@ describe('Nút đặt hàng ở trang giỏ hàng', () => {
     expect(await screen.findByRole('button', { name: 'Tiến hành đặt hàng' })).toBeDisabled();
   });
 
-  it('khách chưa đăng nhập: nút ghi "Đăng nhập để đặt hàng" và vẫn dẫn tới /dat-hang', async () => {
+  it('khách chưa đăng nhập: nút vẫn là "Tiến hành đặt hàng" và dẫn tới /dat-hang (F13)', async () => {
     localStorage.setItem('techstore.guestCart', JSON.stringify([{ productId: 101, quantity: 1 }]));
     mockServer({
       ...storefrontApi,
@@ -513,7 +519,7 @@ describe('Nút đặt hàng ở trang giỏ hàng', () => {
     });
     renderApp('/gio-hang');
 
-    expect(await screen.findByRole('link', { name: 'Đăng nhập để đặt hàng' })).toHaveAttribute(
+    expect(await screen.findByRole('link', { name: 'Tiến hành đặt hàng' })).toHaveAttribute(
       'href',
       '/dat-hang',
     );
@@ -636,11 +642,14 @@ describe('Trang đơn hàng', () => {
     ).toBeInTheDocument();
   });
 
-  it('chưa đăng nhập thì chuyển tới trang đăng nhập', async () => {
+  it('chưa đăng nhập và chưa nhớ số điện thoại của đơn: chuyển tới trang tra cứu, điền sẵn mã đơn (F13)', async () => {
     mockServer(storefrontApi);
     renderApp('/don-hang/TS261028-ABCD');
 
-    expect(await screen.findByLabelText('Mật khẩu')).toBeInTheDocument();
+    expect(
+      await screen.findByRole('heading', { name: 'Tra cứu đơn hàng', level: 1 }),
+    ).toBeInTheDocument();
+    expect(screen.getByLabelText('Mã đơn hàng')).toHaveValue('TS261028-ABCD');
   });
 
   it('đặt tiêu đề tab trình duyệt theo mã đơn', async () => {

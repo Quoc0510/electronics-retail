@@ -57,14 +57,14 @@ Cấu trúc thư mục backend khớp sơ đồ: `src/routes`, `src/controllers`
 
 ## 4. Sơ đồ thực thể - quan hệ (ERD)
 
-Khớp với `backend/prisma/schema.prisma` (các tính năng F00–F07). Review (F08), Wishlist (F08), Coupon (F09) chưa triển khai nên chưa có trong sơ đồ này.
+Khớp với `backend/prisma/schema.prisma` (các tính năng F00–F07 và F13). Review (F08), Wishlist (F08), Coupon (F09) chưa triển khai nên chưa có trong sơ đồ này.
 
 ```mermaid
 erDiagram
     users ||--o{ addresses : "có"
     users ||--o{ refresh_tokens : "có"
     users ||--o| carts : "có 1"
-    users ||--o{ orders : "đặt"
+    users |o--o{ orders : "đặt (đơn khách không đăng nhập: user_id rỗng)"
     users ||--o{ order_status_history : "thực hiện"
     categories ||--o{ products : "chứa"
     brands ||--o{ products : "của"
@@ -83,6 +83,7 @@ erDiagram
         string phone
         enum role "CUSTOMER, ADMIN"
         bool is_active
+        int points "điểm thành viên, BR-15"
     }
     refresh_tokens {
         int id PK
@@ -97,7 +98,7 @@ erDiagram
         string recipient_name
         string phone
         string province
-        string district
+        string district "tùy chọn"
         string ward
         string street
         bool is_default
@@ -150,7 +151,7 @@ erDiagram
     orders {
         int id PK
         string code UK
-        int user_id FK
+        int user_id FK "có thể rỗng (F13)"
         enum status "PENDING, CONFIRMED, SHIPPING, COMPLETED, CANCELLED"
         enum payment_method "COD"
         enum payment_status "UNPAID, PAID"
@@ -162,6 +163,8 @@ erDiagram
         string shipping_address
         string note
         string cancel_reason
+        int points_earned "điểm đã cộng khi hoàn thành"
+        string idempotency_key UK "chống đặt trùng của khách"
     }
     order_items {
         int id PK
@@ -181,7 +184,7 @@ erDiagram
     }
 ```
 
-Ghi chú: ngoài các cột trên, hầu hết bảng còn có `created_at` và `updated_at`. Ràng buộc CHECK (tồn kho không âm, giá dương, số lượng ≥ 1, tiền không âm) nằm ở cuối file migration `20261021000000_init`.
+Ghi chú: ngoài các cột trên, hầu hết bảng còn có `created_at` và `updated_at`. Ràng buộc CHECK (tồn kho không âm, giá dương, số lượng ≥ 1, tiền không âm) nằm ở cuối file migration `20261021000000_init`; điểm không âm (F13) nằm ở `20261028000000_guest_checkout_points`.
 
 ## 5. Sơ đồ tuần tự
 
@@ -214,6 +217,37 @@ sequenceDiagram
 ```
 
 Cách trừ kho `UPDATE ... WHERE stock >= qty` là một câu lệnh nguyên tử, nên nhiều đơn đồng thời không thể làm tồn kho âm (NFR-04); ràng buộc CHECK là lớp bảo vệ thứ hai.
+
+### 5.1b Đặt hàng không cần đăng nhập (F13, US-32)
+
+```mermaid
+sequenceDiagram
+    actor KH as Khách chưa đăng nhập
+    participant C as Client
+    participant API as Backend (order.service)
+    participant DB as PostgreSQL
+
+    KH->>C: Mở trang đặt hàng (sinh requestId)
+    KH->>C: Nhập địa chỉ, bấm "Xác nhận đặt hàng"
+    C->>API: POST /api/orders/guest (items từ giỏ trình duyệt, shipping, requestId)
+    API->>DB: Có đơn nào đã dùng requestId này chưa?
+    alt Đã có (bấm đúp, thử lại)
+        API-->>C: 201 đơn cũ, không tạo thêm
+    else Chưa có
+        API->>DB: BEGIN
+        loop Mỗi sản phẩm theo thứ tự id
+            API->>DB: UPDATE products SET stock = stock - qty WHERE stock >= qty
+        end
+        API->>DB: INSERT orders (user_id = NULL, idempotency_key), order_items, order_status_history
+        API->>DB: COMMIT (UNIQUE idempotency_key chặn request song song cùng requestId)
+        API-->>C: 201 Created (mã đơn)
+    end
+    C->>C: Dọn giỏ tạm, nhớ số điện thoại trong tab
+    C-->>KH: Trang đơn: ghi lại mã đơn và số điện thoại
+    KH->>C: Sau này: Tra cứu đơn hàng (mã đơn + số điện thoại)
+    C->>API: POST /api/orders/lookup
+    API-->>C: 200 đơn (hoặc 404 nếu sai một trong hai)
+```
 
 ### 5.2 Đăng nhập và làm mới phiên (F01, US-02, US-03)
 
@@ -271,10 +305,12 @@ Môi trường local: `docker-compose.yml` chạy PostgreSQL; backend và hai fr
 
 ## 8. Nhật ký thay đổi thiết kế
 
-| Ngày       | Thay đổi                                                                                                                                                       | Lý do                                                                                      |
-| ---------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------ |
-| 21/10/2026 | Chốt schema ban đầu F00–F07; không dùng biến thể sản phẩm; giỏ hàng yêu cầu đăng nhập                                                                          | Phù hợp quy mô 6 tuần, giảm rủi ro trễ tiến độ                                             |
-| 28/10/2026 | Giỏ hàng cho khách chưa đăng nhập (lưu trên trình duyệt, gộp vào tài khoản khi đăng nhập); thêm `POST /api/cart/preview` (công khai) và `POST /api/cart/merge` | Phản hồi người dùng thử: bắt đăng nhập ngay khi thêm vào giỏ gây cản trở; không đổi schema |
+| Ngày       | Thay đổi                                                                                                                                                                                                             | Lý do                                                                                                                   |
+| ---------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ----------------------------------------------------------------------------------------------------------------------- |
+| 21/10/2026 | Chốt schema ban đầu F00–F07; không dùng biến thể sản phẩm; giỏ hàng yêu cầu đăng nhập                                                                                                                                | Phù hợp quy mô 6 tuần, giảm rủi ro trễ tiến độ                                                                          |
+| 28/10/2026 | Giỏ hàng cho khách chưa đăng nhập (lưu trên trình duyệt, gộp vào tài khoản khi đăng nhập); thêm `POST /api/cart/preview` (công khai) và `POST /api/cart/merge`                                                       | Phản hồi người dùng thử: bắt đăng nhập ngay khi thêm vào giỏ gây cản trở; không đổi schema                              |
+| 28/10/2026 | Đặt hàng không cần đăng nhập (F13): `orders.user_id` cho phép rỗng, thêm `idempotency_key`, `points_earned`, `users.points`; tra cứu và hủy đơn bằng mã đơn + số điện thoại; cộng điểm thành viên khi đơn hoàn thành | Phản hồi người dùng thử lần hai: bắt đăng nhập mới được đặt hàng làm khách bỏ giỏ; mua hàng chỉ để tích điểm thành viên |
+| 28/10/2026 | `addresses.district` cho phép rỗng; địa chỉ ghép bỏ phần trống                                                                                                                                                       | Nhiều địa phương đã bỏ cấp quận/huyện nên không thể bắt khách nhập                                                      |
 
 ## 9. Danh sách API đã triển khai
 
@@ -420,16 +456,16 @@ Quyết định thiết kế F05:
   - Cả thêm từng sản phẩm lẫn gộp dùng chung hàm `applyAdd` (cộng dồn bằng UPDATE có điều kiện tồn kho) nên BR-03 được đảm bảo như nhau.
 - `clearCart(userId, db)` sẵn sàng cho F06 xóa giỏ trong cùng transaction với việc tạo đơn.
 
-### F06 - Đặt hàng (COD, cần đăng nhập)
+### F06 - Đặt hàng (COD; thành viên dùng giỏ tài khoản, khách xem F13 bên dưới)
 
 | Method | Đường dẫn         | Mô tả                                                                                   | User story |
 | ------ | ----------------- | --------------------------------------------------------------------------------------- | ---------- |
 | POST   | /api/orders       | Tạo đơn từ giỏ hàng của người dùng: `{ addressId }` hoặc `{ shipping: {...} }`, `note?` | US-16      |
 | GET    | /api/orders/:code | Xem một đơn của chính mình theo mã đơn; đơn của người khác trả 404                      | US-16      |
 
-Danh sách đơn của khách, hủy đơn và quản lý của Admin làm ở F07.
+Danh sách đơn của khách, hủy đơn và quản lý của Admin làm ở F07 (xem bên dưới).
 
-`POST /api/orders` nhận **đúng một** trong hai: `addressId` (địa chỉ trong sổ địa chỉ của chính người đặt) hoặc `shipping` (`recipientName, phone, province, district, ward, street`, cùng quy tắc với sổ địa chỉ). `note` tối đa 500 ký tự, rỗng coi như không có. Thành công trả `201` với đơn đầy đủ: `code, status, paymentMethod, paymentStatus, subtotal, shippingFee, total, recipientName, phone, shippingAddress, note, createdAt, items[], history[]`.
+`POST /api/orders` nhận **đúng một** trong hai: `addressId` (địa chỉ trong sổ địa chỉ của chính người đặt) hoặc `shipping` (`recipientName, phone, province, ward, street` và `district` (không bắt buộc, rỗng = không có), cùng quy tắc với sổ địa chỉ). `note` tối đa 500 ký tự, rỗng coi như không có. Thành công trả `201` với đơn đầy đủ: `code, status, paymentMethod, paymentStatus, subtotal, shippingFee, total, recipientName, phone, shippingAddress, note, createdAt, items[], history[]`.
 
 Mã lỗi thêm: `EMPTY_CART` (400); `ADDRESS_NOT_FOUND`, `ORDER_NOT_FOUND` (404); `CART_NOT_PURCHASABLE` (409, kèm `details.items`: danh sách `{ productId, name, requested, available, reason }` với `reason` là `UNAVAILABLE`, `OUT_OF_STOCK` hoặc `INSUFFICIENT_STOCK`). `AppError` được mở rộng để mang `details`.
 
@@ -444,6 +480,49 @@ Quyết định thiết kế F06:
 - **Phí vận chuyển (BR-05)** do backend tính (`lib/shipping.js`), Client chỉ hiển thị ước tính theo cùng quy tắc.
 - **Địa chỉ đã lưu của người khác trả 404**, không lộ sự tồn tại; đơn của người khác cũng trả 404.
 - Thanh toán COD: `paymentStatus = UNPAID` khi tạo (BR-08); chuyển `PAID` khi đơn hoàn thành làm ở F07.
+
+### F13 - Đặt hàng không cần đăng nhập và điểm thành viên
+
+| Method | Đường dẫn                 | Quyền     | Mô tả                                                                                                                                        | User story |
+| ------ | ------------------------- | --------- | -------------------------------------------------------------------------------------------------------------------------------------------- | ---------- |
+| POST   | /api/orders/guest         | Công khai | Khách đặt hàng: `{ items: [{ productId, quantity }], shipping: {...}, note?, requestId }` (giới hạn `GUEST_ORDER_RATE_LIMIT` lần/15 phút/IP) | US-32      |
+| POST   | /api/orders/lookup        | Công khai | Xem đơn của khách: `{ code, phone }` (giới hạn `ORDER_LOOKUP_RATE_LIMIT` lần/15 phút/IP)                                                     | US-33      |
+| POST   | /api/orders/lookup/cancel | Công khai | Khách tự hủy đơn: `{ code, phone, reason }`; chỉ khi đơn `PENDING`                                                                           | US-33      |
+
+Các API đơn hàng có thêm trong phần đơn trả về: `isGuest` (đơn không có chủ tài khoản), `pointsEarned` (điểm đã cộng, 0 khi chưa hoàn thành), `pointsExpected` (điểm sẽ nhận, chỉ với đơn thành viên đang xử lý). `GET /api/users/me` trả thêm `points`. Admin: dòng danh sách có `isGuest`, `pointsEarned`; chi tiết có `customer` là `null` với đơn khách và kèm `customer.points` với thành viên.
+
+Quyết định thiết kế F13:
+
+- **Cùng một đường tạo đơn:** thành viên và khách dùng chung `reserveLines` (trừ kho có điều kiện, gom lỗi) và `insertOrder` (snapshot, lịch sử), chỉ khác nguồn dòng hàng (giỏ trong CSDL hay danh sách khách gửi) nên BR-02 đến BR-05 áp dụng như nhau. Sản phẩm khách gửi nhưng không tồn tại được báo như `UNAVAILABLE`.
+- **Chống đặt trùng không có giỏ để khóa:** thành viên dựa vào khóa dòng giỏ; khách dùng `requestId` (UUID sinh mỗi lần mở trang đặt hàng) lưu vào cột `idempotency_key` có UNIQUE. Gửi lại cùng mã thì trả đơn đã tạo; hai request cùng mã chạy song song thì request thua bị UNIQUE chặn, transaction hoàn lại kho rồi trả đơn của request thắng. Test: 5 request song song cùng mã chỉ tạo đúng một đơn và kho chỉ bị trừ một lần. Cũng giải quyết một phần nợ #14 cho đường của khách.
+- **Tra cứu bằng mã đơn + số điện thoại (BR-16):** `findFirst({ code, phone, userId: null })`. Sai một trong hai đều trả cùng 404 nên không lộ đơn có tồn tại; điều kiện `userId: null` bảo đảm đơn của thành viên không bị xem qua đường này. Mã đơn có 32^4 khả năng mỗi ngày nên không đủ an toàn một mình, vì vậy kèm số điện thoại và giới hạn tần suất theo IP (xem nợ kỹ thuật #19).
+- **Số điện thoại không đưa lên đường dẫn:** Client nhớ số điện thoại của đơn vừa đặt hoặc vừa tra cứu trong `sessionStorage` (mất khi đóng tab); chưa có thì trang đơn chuyển sang trang tra cứu thay vì bắt đăng nhập.
+- **Hủy đơn của khách:** dùng chung `changeStatus` với thành viên (khóa dòng đơn, chỉ từ `PENDING`, hoàn kho đúng một lần); dòng lịch sử có `changed_by_id` rỗng.
+- **Điểm thành viên (BR-15):** `calculatePoints = floor(subtotal / 10.000)` (`lib/points.js`, bản sao ở `shared` để Client hiển thị điểm dự kiến, có test đối chiếu). Điểm được cộng trong chính `changeStatus` khi chuyển sang `COMPLETED`: dòng đơn đang bị `FOR UPDATE` và luồng trạng thái chỉ cho đi tới `COMPLETED` một lần nên hai Admin bấm cùng lúc cũng chỉ cộng một lần (có test). Ghi `orders.points_earned` để lịch sử đơn tự giải thích; `users.points` có `CHECK (points >= 0)`.
+- **Không đổi điểm lấy ưu đãi:** điểm chỉ tích lũy theo yêu cầu hiện tại (xem nợ kỹ thuật #17).
+
+### F07 - Quản lý đơn hàng
+
+| Method | Đường dẫn                      | Quyền     | Mô tả                                                                                       | User story |
+| ------ | ------------------------------ | --------- | ------------------------------------------------------------------------------------------- | ---------- |
+| GET    | /api/orders                    | Đăng nhập | Đơn của chính mình, mới nhất trước; `status`, `page`, `pageSize` (tối đa 50)                | US-17      |
+| POST   | /api/orders/:code/cancel       | Đăng nhập | Khách tự hủy đơn: `{ reason }` (3 đến 200 ký tự); chỉ khi đơn `PENDING`                     | US-18      |
+| GET    | /api/admin/orders              | ADMIN     | Mọi đơn: lọc `status`, tìm `search` (mã đơn, tên hoặc số điện thoại người nhận), phân trang | US-19      |
+| GET    | /api/admin/orders/:code        | ADMIN     | Chi tiết đơn kèm khách hàng, lịch sử (có người thực hiện) và `allowedNext`                  | US-19      |
+| PATCH  | /api/admin/orders/:code/status | ADMIN     | `{ status, note? }`: đổi trạng thái theo luồng hợp lệ; hủy đơn bắt buộc có `note`           | US-19      |
+
+Dòng của danh sách: `id, code, status, paymentStatus, total, createdAt, recipientName, itemCount, items[]` (3 sản phẩm đầu: tên, số lượng, ảnh), `moreItems`; riêng Admin có thêm `customer { id, fullName, email }`. Đơn trả về ở chi tiết có thêm `cancelReason`. Mã lỗi thêm: `INVALID_TRANSITION` (400), dùng chung cho đổi trạng thái sai luồng và khách hủy đơn đã được xử lý.
+
+Quyết định thiết kế F07:
+
+- **Luồng trạng thái (BR-06)** nằm ở `backend/src/lib/orderStatus.js` (`PENDING → CONFIRMED → SHIPPING → COMPLETED`, hủy khi `PENDING` hoặc `CONFIRMED`, không đi lùi). Đây là nguồn sự thật duy nhất cho khách lẫn Admin; `shared/src/orderStatus.js` giữ bản sao chỉ để giao diện hiện đúng nút và có test bảo đảm hai bản **giống hệt nhau**.
+- **Một hàm đổi trạng thái dùng chung** (`changeStatus`) làm trong transaction: khóa dòng đơn (`SELECT ... FOR UPDATE`), đọc lại trạng thái hiện tại rồi mới kiểm tra luồng, nên hai thao tác cùng lúc trên một đơn (hai Admin cùng xác nhận, khách bấm hủy đúng lúc Admin xác nhận) phải xếp hàng và người đến sau bị từ chối. Có test cho cả ba tình huống.
+- **Hoàn kho (BR-07):** hủy đơn (do khách hay Admin) cộng trả tồn kho từng sản phẩm đúng một lần, theo thứ tự id sản phẩm để các lần hủy đồng thời không khóa chéo nhau. Hủy hai lần cùng lúc chỉ hoàn kho một lần (có test).
+- **Thanh toán COD (BR-08):** chuyển `COMPLETED` thì `paymentStatus` thành `PAID`; hủy thì giữ `UNPAID`.
+- **Khách chỉ tự hủy khi `PENDING`;** đã xác nhận thì phải liên hệ cửa hàng (Admin vẫn hủy được `CONFIRMED`). Lý do hủy lưu vào `cancelReason` và vào lịch sử, kèm tiền tố ("Khách hàng hủy đơn: ..." hoặc "Cửa hàng hủy đơn: ...") để khách và Admin thấy rõ ai hủy.
+- **Mọi lần đổi trạng thái ghi một dòng lịch sử** kèm người thực hiện; Admin thấy tên người thực hiện, khách thấy dòng thời gian.
+- **Tìm kiếm của Admin** dùng SQL thuần với `ILIKE` và thoát ký tự `%`, `_` (Prisma `contains` không tự thoát chúng nên gõ `%` sẽ khớp mọi đơn; có test).
+- Đơn của người khác trả 404 ở mọi API của khách, mã sai định dạng trả 400.
 
 ### Quyết định bảo mật của F01
 
@@ -639,16 +718,48 @@ Thương hiệu nổi bật, banner đôi (chỉ hiện nếu danh mục tương
 
 ## 15. Giao diện đặt hàng F06 (Client)
 
-| Thành phần                                     | Vai trò                                                                                                                                                                              |
-| ---------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
-| `CheckoutPage` (`/dat-hang`, cần đăng nhập)    | Ba bước trên một trang: địa chỉ giao hàng, phương thức thanh toán (COD), ghi chú; bên phải là tóm tắt đơn (từng sản phẩm, tạm tính, phí vận chuyển, tổng) và nút "Xác nhận đặt hàng" |
-| `OrderPage` (`/don-hang/:code`, cần đăng nhập) | Chi tiết một đơn: mã, trạng thái, thời gian, sản phẩm, tổng tiền, thanh toán, địa chỉ, lịch sử. Ngay sau khi đặt có thêm khung "Đặt hàng thành công" kèm mã đơn                      |
-| `lib/addressValidation.js`                     | Quy tắc kiểm tra địa chỉ dùng chung cho sổ địa chỉ (F01) và đặt hàng                                                                                                                 |
-| `lib/orderStatus.js`                           | Nhãn tiếng Việt, màu của trạng thái đơn và thanh toán, hàm định dạng ngày giờ (dùng lại ở F07)                                                                                       |
+| Thành phần                                        | Vai trò                                                                                                                                                                              |
+| ------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
+| `CheckoutPage` (`/dat-hang`, công khai từ F13)    | Ba bước trên một trang: địa chỉ giao hàng, phương thức thanh toán (COD), ghi chú; bên phải là tóm tắt đơn (từng sản phẩm, tạm tính, phí vận chuyển, tổng) và nút "Xác nhận đặt hàng" |
+| `OrderPage` (`/don-hang/:code`, công khai từ F13) | Chi tiết một đơn: mã, trạng thái, thời gian, sản phẩm, tổng tiền, thanh toán, địa chỉ, lịch sử. Ngay sau khi đặt có thêm khung "Đặt hàng thành công" kèm mã đơn                      |
+| `lib/addressValidation.js`                        | Quy tắc kiểm tra địa chỉ dùng chung cho sổ địa chỉ (F01) và đặt hàng                                                                                                                 |
+| `lib/orderStatus.js`                              | Nhãn tiếng Việt, màu của trạng thái đơn và thanh toán, hàm định dạng ngày giờ (dùng lại ở F07)                                                                                       |
 
 - **Địa chỉ (US-16 AC1):** có địa chỉ đã lưu thì chọn sẵn địa chỉ mặc định (hoặc địa chỉ đầu tiên), có lựa chọn "Giao tới địa chỉ khác" mở form nhập; chưa có địa chỉ nào thì mở sẵn form. Không tải được sổ địa chỉ vẫn đặt được bằng cách nhập tay. Gửi `addressId` hoặc `shipping` (đã cắt khoảng trắng), không bao giờ gửi cả hai.
 - **Chống bấm đúp (AC6):** `useFormState` khóa nút trong lúc đang gửi; backend vẫn chặn đặt trùng ở tầng của nó.
 - **Hết hàng (AC4):** hiện danh sách từng sản phẩm có vấn đề kèm số còn lại và đường về giỏ hàng, đồng thời tải lại giỏ để trang giỏ phản ánh tồn kho mới. Nút xác nhận cũng bị khóa sẵn khi giỏ đã có dòng cần xử lý.
 - **Thành công (AC3):** giỏ trong cache được làm trống ngay (biểu tượng giỏ về 0 không cần chờ mạng) rồi chuyển tới trang đơn hàng.
-- **Đăng nhập rồi quay lại đúng bước đặt hàng:** nút ở trang giỏ của khách ghi "Đăng nhập để đặt hàng" và dẫn tới `/dat-hang`; sau khi đăng nhập giỏ tạm được gộp (xem mục 14). Trang đặt hàng chờ gộp xong (cờ `isMerging`) rồi mới kết luận giỏ có trống hay không, để không báo nhầm "giỏ trống".
+- **Đăng nhập rồi quay lại đúng bước đặt hàng:** (từ F13 nút đặt hàng của khách không còn đòi đăng nhập; lời mời "đăng nhập để tích điểm" ở giỏ và trang đặt hàng) dẫn tới `/dat-hang`; sau khi đăng nhập giỏ tạm được gộp (xem mục 14). Trang đặt hàng chờ gộp xong (cờ `isMerging`) rồi mới kết luận giỏ có trống hay không, để không báo nhầm "giỏ trống".
 - Trang đơn hàng báo "không tìm thấy" cho cả mã không tồn tại, mã của người khác (404) và mã sai định dạng (400), không thử lại vô ích.
+
+## 16. Giao diện quản lý đơn hàng F07
+
+### Client (khách hàng)
+
+| Thành phần                      | Vai trò                                                                                                                                                                                                                                                            |
+| ------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
+| `OrderListPage` (`/don-hang`)   | Lịch sử đơn của mình: lọc theo trạng thái (nút bật/tắt) và phân trang đều nằm trên URL; mỗi đơn hiện mã, ngày đặt, trạng thái, vài sản phẩm đầu, tổng tiền. Đủ trạng thái biên: khung chờ, lỗi kèm Thử lại, chưa có đơn, lọc không ra đơn, trang vượt quá số trang |
+| `OrderPage` (`/don-hang/:code`) | Thêm khung hủy đơn khi đơn còn chờ xác nhận, khung "Đơn hàng đã được hủy" kèm lý do, liên kết về danh sách đơn                                                                                                                                                     |
+| `CancelOrderPanel`              | Chọn lý do (4 lý do thường gặp hoặc "Lý do khác" tự nhập), có bước xác nhận riêng và nút "Giữ đơn hàng"; bắt buộc có lý do 3 đến 200 ký tự; lỗi máy chủ (ví dụ đơn vừa được xác nhận) hiện ngay trong khung                                                        |
+| Menu tài khoản                  | Thêm mục "Đơn hàng của tôi"                                                                                                                                                                                                                                        |
+
+### Admin
+
+| Thành phần                            | Vai trò                                                                                                                                                                                                           |
+| ------------------------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `OrdersPage` (`/don-hang`)            | Bảng đơn: tìm theo mã đơn, tên hoặc số điện thoại (chờ 300 ms sau khi ngừng gõ), lọc theo trạng thái, phân trang; mục "Đơn hàng" ở thanh bên                                                                      |
+| `OrderDetailPage` (`/don-hang/:code`) | Khách hàng, địa chỉ, sản phẩm, tổng tiền, lịch sử kèm người thực hiện, khung "Xử lý đơn hàng"                                                                                                                     |
+| Xử lý đơn                             | Chỉ hiện nút của bước hợp lệ tiếp theo theo `allowedNext` (Xác nhận đơn, Bắt đầu giao hàng, Hoàn thành), có ô ghi chú tùy chọn vào lịch sử; "Hủy đơn" mở form bắt buộc lý do. Máy chủ vẫn từ chối bước sai        |
+| In phiếu (US-20)                      | Nút "In phiếu" gọi hộp thoại in của trình duyệt. Kiểu in dùng biến thể `print:` của Tailwind: ẩn thanh bên, thanh trên, nút và lịch sử; hiện đầu phiếu "TechStore - Phiếu đơn hàng", sản phẩm, tổng tiền, địa chỉ |
+| Trang tổng quan                       | Thêm thẻ "Đơn chờ xác nhận" (lấy tổng bằng `pageSize=1`) dẫn tới danh sách đơn                                                                                                                                    |
+
+## 17. Giao diện đặt hàng không cần đăng nhập F13 (Client và Admin)
+
+| Thành phần                              | Vai trò                                                                                                                                                                                                                                                                                                                                                                                                                                                                              |
+| --------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
+| `CheckoutPage`                          | Không còn nằm sau `ProtectedRoute`. Khách: mở sẵn form địa chỉ (không có sổ địa chỉ), gửi `POST /orders/guest` kèm giỏ tạm và `requestId` (sinh một lần mỗi lần mở trang nên thử lại sau lỗi dùng cùng mã); đặt xong dọn giỏ tạm và nhớ số điện thoại. Thành viên: như F06. Cả hai thấy số điểm của đơn (khách được mời đăng nhập, giỏ vẫn giữ nguyên nhờ gộp giỏ khi đăng nhập). Chờ `initializing` của phiên để không nhầm thành viên là khách trong lúc khôi phục phiên.          |
+| `OrderPage`                             | Hai chế độ cùng giao diện: thành viên (`GET /orders/:code`) hoặc khách có số điện thoại đã nhớ (`POST /orders/lookup`; hủy qua `/orders/lookup/cancel`). Chưa đăng nhập và chưa nhớ số điện thoại thì chuyển sang trang tra cứu kèm mã đơn. Khung thành công của khách nhắc ghi lại mã đơn + số điện thoại và mời đăng ký; của thành viên cho biết điểm sẽ nhận. Truy vấn có `staleTime` 30 giây để không gọi lại ngay sau khi trang tra cứu vừa nạp (tra cứu bị giới hạn tần suất). |
+| `OrderLookupPage` (`/tra-cuu-don-hang`) | Form mã đơn + số điện thoại (kiểm tra dạng trước khi gửi, mã gõ chữ thường vẫn được, điền sẵn từ `?code=`); đúng thì ghi đơn vào cache, nhớ số điện thoại và mở trang đơn; sai thì báo "không tìm thấy" như nhau. Có lối tắt ở chân trang và thanh tiện ích.                                                                                                                                                                                                                         |
+| `CartPage`                              | Nút luôn là "Tiến hành đặt hàng"; khách thấy lời mời tích điểm, thành viên thấy điểm của đơn.                                                                                                                                                                                                                                                                                                                                                                                        |
+| `ProfilePage`                           | Thẻ chào hiện điểm thành viên, tải lại từ `GET /users/me` vì điểm đổi khi Admin hoàn thành đơn.                                                                                                                                                                                                                                                                                                                                                                                      |
+| Admin `OrdersPage`, `OrderDetailPage`   | Đơn khách ghi "Khách không đăng nhập" (chi tiết không còn đọc `customer.fullName` của đơn không có chủ); thành viên hiện điểm hiện có và điểm của đơn.                                                                                                                                                                                                                                                                                                                               |

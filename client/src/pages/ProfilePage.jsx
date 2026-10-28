@@ -1,10 +1,13 @@
 /**
- * @feature [F01][F04] Trang tài khoản gồm 3 mục: thông tin cá nhân, đổi mật khẩu, sổ địa chỉ (US-04).
+ * @feature [F01][F04][F13] Trang tài khoản gồm 3 mục: thông tin cá nhân, đổi mật khẩu, sổ địa chỉ (US-04).
  * Đầu trang có thẻ chào với ảnh đại diện chữ cái đầu; các mục chuyển bằng dải nút dạng viên thuốc.
  * Trang này nằm trong ProtectedRoute nên chắc chắn đã đăng nhập.
+ * [F13] Thẻ chào hiện điểm thành viên (BR-15); điểm đổi khi Admin hoàn thành đơn nên luôn tải lại từ máy chủ.
  */
 import { useState } from 'react';
-import { IconLayers, IconShield, IconUser } from '@techstore/shared';
+import { useQuery } from '@tanstack/react-query';
+import { IconLayers, IconShield, IconStar, IconUser } from '@techstore/shared';
+import { api } from '../lib/api.js';
 import AddressBook from '../components/profile/AddressBook.jsx';
 import PasswordForm from '../components/profile/PasswordForm.jsx';
 import ProfileForm from '../components/profile/ProfileForm.jsx';
@@ -18,6 +21,13 @@ const TABS = [
 
 export default function ProfilePage() {
   const { user } = useAuth();
+  // Điểm có thể đã đổi sau khi đăng nhập (đơn được hoàn thành) nên không dùng bản user lưu lúc đăng nhập
+  const { data: me } = useQuery({
+    queryKey: ['me'],
+    queryFn: () => api.get('/users/me').then((res) => res.data),
+    placeholderData: user,
+  });
+  const points = me?.points ?? 0;
   const [activeId, setActiveId] = useState('info');
   const { Panel } = TABS.find((tab) => tab.id === activeId);
 
@@ -29,12 +39,22 @@ export default function ProfilePage() {
           <span className="flex h-16 w-16 shrink-0 items-center justify-center rounded-2xl bg-white/15 font-display text-3xl font-bold backdrop-blur">
             {user.fullName.trim().charAt(0).toUpperCase()}
           </span>
-          <div className="min-w-0">
+          <div className="min-w-0 flex-1">
             <h1 className="truncate text-2xl font-bold sm:text-3xl">Tài khoản của tôi</h1>
             <p className="truncate text-sm text-white/80">
               {user.fullName} · {user.email}
             </p>
           </div>
+          <p
+            aria-label="Điểm thành viên"
+            className="flex shrink-0 flex-col items-center rounded-2xl bg-white/15 px-4 py-2 backdrop-blur"
+          >
+            <span className="flex items-center gap-1.5 font-display text-2xl font-bold">
+              <IconStar size={18} aria-hidden="true" />
+              {points.toLocaleString('vi-VN')}
+            </span>
+            <span className="text-xs text-white/80">điểm thành viên</span>
+          </p>
         </div>
       </div>
 

@@ -6,7 +6,7 @@
  */
 import { useEffect, useRef, useState } from 'react';
 import { Link } from 'react-router-dom';
-import { IconChevronDown, IconLogOut, IconUser } from '@techstore/shared';
+import { IconBag, IconChevronDown, IconLogOut, IconUser } from '@techstore/shared';
 import { useAuth } from '../../context/AuthContext.jsx';
 
 function UserMenu({ user, onLogout }) {
@@ -66,6 +66,15 @@ function UserMenu({ user, onLogout }) {
           >
             <IconUser size={16} />
             Tài khoản của tôi
+          </Link>
+          <Link
+            role="menuitem"
+            to="/don-hang"
+            onClick={() => setOpen(false)}
+            className="flex items-center gap-2 px-4 py-2.5 hover:bg-brand-50 hover:text-brand-700"
+          >
+            <IconBag size={16} />
+            Đơn hàng của tôi
           </Link>
           <button
             role="menuitem"

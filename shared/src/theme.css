@@ -181,6 +181,7 @@
   --text-rose-800: #fecdd3;
   --text-emerald-700: #6ee7b7;
   --text-emerald-800: #a7f3d0;
+  --text-emerald-900: #d1fae5;
 
   --shadow-card: 0 1px 2px rgb(0 0 0 / 0.4), 0 8px 24px -12px rgb(0 0 0 / 0.6);
   --shadow-card-hover: 0 4px 6px rgb(0 0 0 / 0.3), 0 24px 48px -16px rgb(99 102 241 / 0.45);
@@ -218,6 +219,7 @@
   --text-rose-800: initial;
   --text-emerald-700: initial;
   --text-emerald-800: initial;
+  --text-emerald-900: initial;
   --shadow-card: 0 1px 2px rgb(15 23 42 / 0.06), 0 8px 24px -12px rgb(15 23 42 / 0.12);
   --shadow-card-hover: 0 4px 6px rgb(15 23 42 / 0.05), 0 24px 48px -16px rgb(79 70 229 / 0.35);
 }
@@ -264,6 +266,9 @@
   }
   .text-emerald-800 {
     color: var(--text-emerald-800, var(--color-emerald-800));
+  }
+  .text-emerald-900 {
+    color: var(--text-emerald-900, var(--color-emerald-900));
   }
   .from-white {
     --tw-gradient-from: var(--surface-card, #fff);

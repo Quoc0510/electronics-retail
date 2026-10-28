@@ -1,5 +1,5 @@
 /**
- * @feature [F00][F01][F02][F03] Nền tảng, Phân quyền, Danh mục/Thương hiệu, Sản phẩm - Khai báo các trang của Admin.
+ * @feature [F00][F01][F02][F03][F07] Nền tảng, Phân quyền, Danh mục/Thương hiệu, Sản phẩm - Khai báo các trang của Admin.
  * Mỗi tính năng quản trị mới sẽ thêm <Route> vào nhóm được bảo vệ (F03 quản lý sản phẩm, F07 quản lý đơn hàng...).
  */
 import { Routes, Route } from 'react-router-dom';
@@ -10,6 +10,8 @@ import CategoriesPage from './pages/CategoriesPage.jsx'; // [F02]
 import DashboardPage from './pages/DashboardPage.jsx';
 import LoginPage from './pages/LoginPage.jsx';
 import NotFoundPage from './pages/NotFoundPage.jsx';
+import OrderDetailPage from './pages/OrderDetailPage.jsx'; // [F07]
+import OrdersPage from './pages/OrdersPage.jsx'; // [F07]
 import ProductFormPage from './pages/ProductFormPage.jsx'; // [F03]
 import ProductsPage from './pages/ProductsPage.jsx'; // [F03]
 
@@ -29,6 +31,9 @@ export default function App() {
           <Route path="/san-pham" element={<ProductsPage />} />
           <Route path="/san-pham/them" element={<ProductFormPage />} />
           <Route path="/san-pham/:id" element={<ProductFormPage />} />
+          {/* [F07] Quản lý đơn hàng */}
+          <Route path="/don-hang" element={<OrdersPage />} />
+          <Route path="/don-hang/:code" element={<OrderDetailPage />} />
           <Route path="*" element={<NotFoundPage />} />
         </Route>
       </Route>

@@ -16,7 +16,7 @@ const password = z
   .regex(/\d/, 'Mật khẩu phải có ít nhất một chữ số');
 
 // US-04 AC4: số điện thoại Việt Nam, 10 số và bắt đầu bằng 0
-const phone = z
+export const phone = z
   .string()
   .trim()
   .regex(/^0\d{9}$/, 'Số điện thoại phải gồm 10 số và bắt đầu bằng 0');
@@ -58,7 +58,14 @@ export const addressSchema = z.object({
   recipientName: fullName,
   phone,
   province: z.string().trim().min(1, 'Vui lòng nhập tỉnh/thành phố').max(100),
-  district: z.string().trim().min(1, 'Vui lòng nhập quận/huyện').max(100),
+  // Không bắt buộc: nhiều địa phương đã bỏ cấp quận/huyện. Chuỗi rỗng = không có (null); không gửi = giữ nguyên khi sửa
+  district: z
+    .string()
+    .trim()
+    .max(100)
+    .nullable()
+    .optional()
+    .transform((value) => (value === undefined ? undefined : value || null)),
   ward: z.string().trim().min(1, 'Vui lòng nhập phường/xã').max(100),
   street: z.string().trim().min(1, 'Vui lòng nhập số nhà, tên đường').max(200),
   isDefault: z.boolean().optional(),

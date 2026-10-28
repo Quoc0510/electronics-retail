@@ -185,7 +185,7 @@ describe('Sổ địa chỉ (US-04 AC3)', () => {
     await userEvent.type(screen.getByLabelText('Tên người nhận'), 'Nguyễn Văn A');
     await userEvent.type(screen.getByLabelText('Số điện thoại người nhận'), '0912345678');
     await userEvent.type(screen.getByLabelText('Tỉnh/Thành phố'), 'TP. Hồ Chí Minh');
-    await userEvent.type(screen.getByLabelText('Quận/Huyện'), 'Quận 1');
+    await userEvent.type(screen.getByLabelText('Quận/Huyện (nếu có)'), 'Quận 1');
     await userEvent.type(screen.getByLabelText('Phường/Xã'), 'Phường Bến Nghé');
     await userEvent.type(screen.getByLabelText('Số nhà, tên đường'), '1 Lê Duẩn');
     await userEvent.click(screen.getByRole('button', { name: 'Lưu địa chỉ' }));
