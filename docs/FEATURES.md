@@ -5,22 +5,22 @@ Mỗi file code có header `@feature [Fxx] ...` để truy vết file → tính 
 
 ## Danh mục tính năng
 
-| Mã  | Tính năng                                                 | Mức ưu tiên                      | Trạng thái       |
-| --- | --------------------------------------------------------- | -------------------------------- | ---------------- |
-| F00 | Nền tảng (setup, CI)                                      | Bắt buộc                         | Xong             |
-| F01 | Xác thực và phân quyền                                    | Bắt buộc                         | Xong             |
-| F02 | Danh mục và thương hiệu                                   | Bắt buộc                         | Xong             |
-| F03 | Sản phẩm (CRUD, ảnh)                                      | Bắt buộc                         | Xong             |
-| F04 | Duyệt và tìm sản phẩm (gồm thiết kế lại giao diện)        | Bắt buộc                         | Xong             |
-| F05 | Giỏ hàng (gồm giỏ cho khách chưa đăng nhập)               | Bắt buộc                         | Xong             |
-| F06 | Đặt hàng (COD)                                            | Bắt buộc                         | Xong             |
-| F07 | Quản lý đơn hàng                                          | Bắt buộc                         | Xong (chờ merge) |
-| F08 | Đánh giá và yêu thích                                     | Nên làm (cắt nếu trễ)            | Chưa làm         |
-| F09 | Khuyến mãi / mã giảm giá                                  | Nên làm (cắt nếu trễ)            | Chưa làm         |
-| F10 | Dashboard và báo cáo, quản lý người dùng                  | Bắt buộc                         | Xong (chờ merge) |
-| F11 | Mở rộng (VNPay/ZaloPay sandbox, email)                    | Chỉ làm nếu dư thời gian         | Chưa làm         |
-| F12 | Trải nghiệm mở rộng: chế độ tối, so sánh, trang thông tin | Có thể làm thêm                  | Xong             |
-| F13 | Đặt hàng không cần đăng nhập và điểm thành viên           | Bắt buộc (yêu cầu bổ sung 28/10) | Xong (chờ merge) |
+| Mã  | Tính năng                                                 | Mức ưu tiên                      | Trạng thái |
+| --- | --------------------------------------------------------- | -------------------------------- | ---------- |
+| F00 | Nền tảng (setup, CI)                                      | Bắt buộc                         | Xong       |
+| F01 | Xác thực và phân quyền                                    | Bắt buộc                         | Xong       |
+| F02 | Danh mục và thương hiệu                                   | Bắt buộc                         | Xong       |
+| F03 | Sản phẩm (CRUD, ảnh)                                      | Bắt buộc                         | Xong       |
+| F04 | Duyệt và tìm sản phẩm (gồm thiết kế lại giao diện)        | Bắt buộc                         | Xong       |
+| F05 | Giỏ hàng (gồm giỏ cho khách chưa đăng nhập)               | Bắt buộc                         | Xong       |
+| F06 | Đặt hàng (COD)                                            | Bắt buộc                         | Xong       |
+| F07 | Quản lý đơn hàng                                          | Bắt buộc                         | Xong       |
+| F08 | Đánh giá và yêu thích                                     | Nên làm (cắt nếu trễ)            | Chưa làm   |
+| F09 | Khuyến mãi / mã giảm giá                                  | Nên làm (cắt nếu trễ)            | Chưa làm   |
+| F10 | Dashboard và báo cáo, quản lý người dùng                  | Bắt buộc                         | Xong       |
+| F11 | Mở rộng (VNPay/ZaloPay sandbox, email)                    | Chỉ làm nếu dư thời gian         | Chưa làm   |
+| F12 | Trải nghiệm mở rộng: chế độ tối, so sánh, trang thông tin | Có thể làm thêm                  | Xong       |
+| F13 | Đặt hàng không cần đăng nhập và điểm thành viên           | Bắt buộc (yêu cầu bổ sung 28/10) | Xong       |
 
 F12 (đợt 1) gồm: chế độ tối, so sánh sản phẩm, trang thông tin (Giới thiệu, Liên hệ, Hỏi đáp, Chính sách), các khối trang chủ mới (thương hiệu, banner, số liệu, sản phẩm đã xem). Đợt 2 (cần backend, làm sau F05-F07): form liên hệ lưu tin nhắn, đăng ký nhận tin, yêu thích và đánh giá (F08), tin tức.
 
