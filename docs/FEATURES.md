@@ -12,8 +12,8 @@ Mỗi file code có header `@feature [Fxx] ...` để truy vết file → tính 
 | F02 | Danh mục và thương hiệu                                   | Bắt buộc                 | Xong             |
 | F03 | Sản phẩm (CRUD, ảnh)                                      | Bắt buộc                 | Xong             |
 | F04 | Duyệt và tìm sản phẩm (gồm thiết kế lại giao diện)        | Bắt buộc                 | Xong             |
-| F05 | Giỏ hàng (gồm giỏ cho khách chưa đăng nhập)               | Bắt buộc                 | Xong (chờ merge) |
-| F06 | Đặt hàng (COD)                                            | Bắt buộc                 | Chưa làm         |
+| F05 | Giỏ hàng (gồm giỏ cho khách chưa đăng nhập)               | Bắt buộc                 | Xong             |
+| F06 | Đặt hàng (COD)                                            | Bắt buộc                 | Xong (chờ merge) |
 | F07 | Quản lý đơn hàng                                          | Bắt buộc                 | Chưa làm         |
 | F08 | Đánh giá và yêu thích                                     | Nên làm (cắt nếu trễ)    | Chưa làm         |
 | F09 | Khuyến mãi / mã giảm giá                                  | Nên làm (cắt nếu trễ)    | Chưa làm         |

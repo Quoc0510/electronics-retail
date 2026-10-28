@@ -412,12 +412,38 @@ Quyết định thiết kế F05:
 - **Chỉ thêm được sản phẩm khách đang thấy** (sản phẩm, danh mục, thương hiệu đều đang hiện). Sản phẩm ẩn trả 404 như không tồn tại để không lộ sự tồn tại của hàng đã ẩn.
 - **Dòng của người khác trả 404**, không phải 403, để không lộ id dòng của giỏ khác (kiểm tra quyền sở hữu ngay trong truy vấn).
 - **Giỏ hàng không giữ chỗ tồn kho:** tồn kho có thể đổi sau khi thêm, nên mỗi dòng có `status` và việc kiểm tra bắt buộc cuối cùng nằm ở lúc đặt hàng (F06). Giá luôn lấy hiện tại, giỏ không lưu giá cũ (BR-04 chỉ áp dụng cho đơn hàng).
+- **Tạo giỏ lần đầu an toàn khi nhiều request cùng lúc:** dùng `ensureCart` (đọc, tạo, nếu trùng khóa duy nhất `userId` thì đọc lại giỏ của request thắng) thay cho `prisma.cart.upsert`, vì upsert của Prisma không nguyên tử và ném P2002 thành lỗi 500. Lỗi này được CI phát hiện (xem nhật ký AI, mục 30).
 - Giới hạn 99 sản phẩm mỗi dòng để chặn số vô lý trước khi chạm CSDL.
 - **Giỏ của khách (điều chỉnh 28/10/2026):** trình duyệt chỉ lưu `{ productId, quantity }`; giá, tồn kho và trạng thái luôn do máy chủ tính nên không bao giờ cũ.
   - `POST /api/cart/preview` nhận `{ items: [{ productId, quantity }] }` (tối đa 50 mục, mỗi mục 1 đến 99), trả cùng dạng giỏ như `GET /api/cart` nhưng id dòng là id sản phẩm. **Không ghi CSDL.** Sản phẩm không tồn tại bị bỏ qua, mục trùng được cộng số lượng. Đây là API công khai duy nhất của giỏ nên giới hạn kích thước danh sách để không bị lạm dụng.
   - `POST /api/cart/merge` (cần đăng nhập) nhận cùng dạng dữ liệu, trả `{ cart, notes }`. Khác với thêm từng sản phẩm, gộp **không báo lỗi khi thiếu hàng** mà thêm tối đa số lượng còn được phép và ghi chú lại (khách không nên mất cả giỏ vì một món hết hàng). Sản phẩm đã ẩn bị bỏ qua và chỉ báo số lượng, không lộ tên.
   - Cả thêm từng sản phẩm lẫn gộp dùng chung hàm `applyAdd` (cộng dồn bằng UPDATE có điều kiện tồn kho) nên BR-03 được đảm bảo như nhau.
 - `clearCart(userId, db)` sẵn sàng cho F06 xóa giỏ trong cùng transaction với việc tạo đơn.
+
+### F06 - Đặt hàng (COD, cần đăng nhập)
+
+| Method | Đường dẫn         | Mô tả                                                                                   | User story |
+| ------ | ----------------- | --------------------------------------------------------------------------------------- | ---------- |
+| POST   | /api/orders       | Tạo đơn từ giỏ hàng của người dùng: `{ addressId }` hoặc `{ shipping: {...} }`, `note?` | US-16      |
+| GET    | /api/orders/:code | Xem một đơn của chính mình theo mã đơn; đơn của người khác trả 404                      | US-16      |
+
+Danh sách đơn của khách, hủy đơn và quản lý của Admin làm ở F07.
+
+`POST /api/orders` nhận **đúng một** trong hai: `addressId` (địa chỉ trong sổ địa chỉ của chính người đặt) hoặc `shipping` (`recipientName, phone, province, district, ward, street`, cùng quy tắc với sổ địa chỉ). `note` tối đa 500 ký tự, rỗng coi như không có. Thành công trả `201` với đơn đầy đủ: `code, status, paymentMethod, paymentStatus, subtotal, shippingFee, total, recipientName, phone, shippingAddress, note, createdAt, items[], history[]`.
+
+Mã lỗi thêm: `EMPTY_CART` (400); `ADDRESS_NOT_FOUND`, `ORDER_NOT_FOUND` (404); `CART_NOT_PURCHASABLE` (409, kèm `details.items`: danh sách `{ productId, name, requested, available, reason }` với `reason` là `UNAVAILABLE`, `OUT_OF_STOCK` hoặc `INSUFFICIENT_STOCK`). `AppError` được mở rộng để mang `details`.
+
+Quyết định thiết kế F06:
+
+- **Một transaction duy nhất (US-16 AC5):** khóa giỏ, kiểm tra và trừ tồn kho từng dòng, tạo đơn kèm các dòng và lịch sử, xóa giỏ. Bất kỳ bước nào lỗi thì tất cả được hoàn lại, nên không có đơn mà kho chưa trừ, cũng không có kho đã trừ mà không có đơn. Test kiểm chứng: giỏ có một sản phẩm đủ hàng và một sản phẩm hết hàng thì kho của sản phẩm đủ hàng **không** bị trừ.
+- **Chống bán vượt (BR-03):** trừ kho bằng `UPDATE ... WHERE stock >= n` ngay trong câu lệnh (không đọc rồi ghi). Hai người cùng mua món còn 3 cái, mỗi người 2 cái thì đúng một người thành công. Ràng buộc `CHECK (stock >= 0)` của PostgreSQL là lớp bảo vệ cuối cùng. Các dòng được xử lý theo thứ tự id sản phẩm để hai đơn cùng lúc không khóa chéo nhau (deadlock).
+- **Gom hết lỗi rồi báo một lần (US-16 AC4):** xử lý mọi dòng, gom các sản phẩm có vấn đề (đã ẩn, hết hàng, không đủ số lượng) rồi mới ném lỗi `409` để khách biết cần sửa gì; lỗi làm hoàn lại các lần trừ kho trước đó.
+- **Chống đặt trùng khi bấm đúp (US-16 AC6):** giao dịch đầu tiên khóa dòng giỏ (`SELECT ... FOR UPDATE`) và xóa giỏ khi xong; giao dịch thứ hai phải chờ rồi thấy giỏ trống nên bị từ chối `EMPTY_CART`. Không cần cột khóa chống trùng nên không có migration. Giao diện cũng khóa nút trong lúc gửi.
+- **Snapshot (BR-04):** đơn lưu bản sao tên, SKU, đơn giá (giá khuyến mãi nếu có, BR-02) của từng dòng và địa chỉ giao hàng dạng chuỗi; sửa sản phẩm hay xóa địa chỉ sau đó không làm đổi đơn cũ.
+- **Mã đơn (BR-12):** `TSyymmdd-xxxx` theo ngày giờ Việt Nam; 4 ký tự ngẫu nhiên lấy từ bảng ký tự bỏ `0, O, 1, I` để khách đọc mã qua điện thoại không nhầm. Trùng mã (rất hiếm) do ràng buộc UNIQUE phát hiện thì tạo mã khác và làm lại transaction (tối đa 5 lần).
+- **Phí vận chuyển (BR-05)** do backend tính (`lib/shipping.js`), Client chỉ hiển thị ước tính theo cùng quy tắc.
+- **Địa chỉ đã lưu của người khác trả 404**, không lộ sự tồn tại; đơn của người khác cũng trả 404.
+- Thanh toán COD: `paymentStatus = UNPAID` khi tạo (BR-08); chuyển `PAID` khi đơn hoàn thành làm ở F07.
 
 ### Quyết định bảo mật của F01
 
@@ -610,3 +636,19 @@ Thương hiệu nổi bật, banner đôi (chỉ hiện nếu danh mục tương
 - **Dọn dữ liệu cũ:** sản phẩm đã bị xóa hẳn khỏi cửa hàng không còn trong kết quả xem trước nên tự bị dọn khỏi trình duyệt.
 - **Gộp khi đăng nhập:** `CartSync` (gắn trong Layout) thấy người dùng vừa đăng nhập hoặc đăng ký mà còn giỏ tạm thì gọi `POST /cart/merge`, ghi giỏ trả về vào cache, xóa giỏ tạm. Gộp lỗi (mất mạng) thì **giữ giỏ tạm** để thử lại lần tải trang sau. Ghi chú gộp (`lib/cartNotice.js`, sessionStorage) được trang giỏ hàng hiện kèm nút "Đã hiểu".
 - Biểu tượng giỏ ở đầu trang hiện ngay tổng số lượng từ bộ nhớ, không chờ mạng. Trang `/gio-hang` giờ là trang công khai; ở tóm tắt đơn hàng có lời nhắc đăng nhập để đặt hàng (F06).
+
+## 15. Giao diện đặt hàng F06 (Client)
+
+| Thành phần                                     | Vai trò                                                                                                                                                                              |
+| ---------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
+| `CheckoutPage` (`/dat-hang`, cần đăng nhập)    | Ba bước trên một trang: địa chỉ giao hàng, phương thức thanh toán (COD), ghi chú; bên phải là tóm tắt đơn (từng sản phẩm, tạm tính, phí vận chuyển, tổng) và nút "Xác nhận đặt hàng" |
+| `OrderPage` (`/don-hang/:code`, cần đăng nhập) | Chi tiết một đơn: mã, trạng thái, thời gian, sản phẩm, tổng tiền, thanh toán, địa chỉ, lịch sử. Ngay sau khi đặt có thêm khung "Đặt hàng thành công" kèm mã đơn                      |
+| `lib/addressValidation.js`                     | Quy tắc kiểm tra địa chỉ dùng chung cho sổ địa chỉ (F01) và đặt hàng                                                                                                                 |
+| `lib/orderStatus.js`                           | Nhãn tiếng Việt, màu của trạng thái đơn và thanh toán, hàm định dạng ngày giờ (dùng lại ở F07)                                                                                       |
+
+- **Địa chỉ (US-16 AC1):** có địa chỉ đã lưu thì chọn sẵn địa chỉ mặc định (hoặc địa chỉ đầu tiên), có lựa chọn "Giao tới địa chỉ khác" mở form nhập; chưa có địa chỉ nào thì mở sẵn form. Không tải được sổ địa chỉ vẫn đặt được bằng cách nhập tay. Gửi `addressId` hoặc `shipping` (đã cắt khoảng trắng), không bao giờ gửi cả hai.
+- **Chống bấm đúp (AC6):** `useFormState` khóa nút trong lúc đang gửi; backend vẫn chặn đặt trùng ở tầng của nó.
+- **Hết hàng (AC4):** hiện danh sách từng sản phẩm có vấn đề kèm số còn lại và đường về giỏ hàng, đồng thời tải lại giỏ để trang giỏ phản ánh tồn kho mới. Nút xác nhận cũng bị khóa sẵn khi giỏ đã có dòng cần xử lý.
+- **Thành công (AC3):** giỏ trong cache được làm trống ngay (biểu tượng giỏ về 0 không cần chờ mạng) rồi chuyển tới trang đơn hàng.
+- **Đăng nhập rồi quay lại đúng bước đặt hàng:** nút ở trang giỏ của khách ghi "Đăng nhập để đặt hàng" và dẫn tới `/dat-hang`; sau khi đăng nhập giỏ tạm được gộp (xem mục 14). Trang đặt hàng chờ gộp xong (cờ `isMerging`) rồi mới kết luận giỏ có trống hay không, để không báo nhầm "giỏ trống".
+- Trang đơn hàng báo "không tìm thấy" cho cả mã không tồn tại, mã của người khác (404) và mã sai định dạng (400), không thử lại vô ích.

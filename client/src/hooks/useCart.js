@@ -18,6 +18,7 @@ import { api } from '../lib/api.js';
 import {
   EMPTY_GUEST_ITEMS,
   getGuestItems,
+  getMerging,
   guestQuantity,
   guestTotalQuantity,
   saveGuestItems,
@@ -86,6 +87,9 @@ export function useCart() {
     () => EMPTY_GUEST_ITEMS,
   );
 
+  // Đang gộp giỏ tạm vào tài khoản: giỏ trong tài khoản chưa phải là giỏ cuối cùng
+  const isMerging = useSyncExternalStore(subscribeGuestCart, getMerging, () => false);
+
   const serverKey = ['cart', user?.id ?? null];
 
   const serverQuery = useQuery({
@@ -150,6 +154,7 @@ export function useCart() {
 
   return {
     isLoggedIn: Boolean(user),
+    isMerging,
     cart: cart ?? EMPTY_CART,
     isPending: user ? serverQuery.isPending : hasGuestItems && guestQuery.isPending,
     isError: user || hasGuestItems ? active.isError : false,

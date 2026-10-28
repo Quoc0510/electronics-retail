@@ -5,10 +5,10 @@
  *  - Giỏ trống có gợi ý quay lại mua sắm (AC3).
  *  - Sản phẩm bị ẩn, hết hàng hoặc tồn kho giảm dưới số lượng được đánh dấu rõ và không tính vào tổng tiền (AC4).
  *  - Phí vận chuyển ước tính theo BR-05, kèm gợi ý số tiền còn thiếu để được miễn phí.
- * Nút "Đặt hàng" bị khóa cho tới khi làm F06.
+ * Nút "Đặt hàng" dẫn tới /dat-hang (F06) khi mọi dòng đều mua được; khách chưa đăng nhập được nhờ đăng nhập rồi quay lại đúng bước đặt hàng.
  */
 import { useEffect, useState, useSyncExternalStore } from 'react';
-import { Link, useLocation } from 'react-router-dom';
+import { Link } from 'react-router-dom';
 import {
   Alert,
   Button,
@@ -144,7 +144,6 @@ function CartLine({ item, busy, onChangeQuantity, onRemove, error, resetKey }) {
 }
 
 function Summary({ cart, isLoggedIn }) {
-  const location = useLocation();
   const fee = shippingFee(cart.subtotal);
   const missing = amountToFreeShipping(cart.subtotal);
   const progress = Math.min(100, Math.round((cart.subtotal / FREE_SHIPPING_THRESHOLD) * 100));
@@ -207,18 +206,26 @@ function Summary({ cart, isLoggedIn }) {
         </p>
       )}
 
-      <Button size="lg" className="w-full" disabled>
-        Đặt hàng
-      </Button>
-      <p className="text-center text-xs text-slate-500">
-        Chức năng đặt hàng và thanh toán khi nhận hàng sắp ra mắt.
-      </p>
+      {cart.canCheckout ? (
+        <Link
+          to="/dat-hang"
+          className="inline-flex w-full items-center justify-center gap-2 rounded-xl bg-gradient-to-r from-brand-600 to-violet-600 px-6 py-3 text-base font-semibold text-white shadow-sm transition hover:shadow-glow hover:brightness-110"
+        >
+          {isLoggedIn ? 'Tiến hành đặt hàng' : 'Đăng nhập để đặt hàng'}
+        </Link>
+      ) : (
+        <Button size="lg" className="w-full" disabled>
+          Tiến hành đặt hàng
+        </Button>
+      )}
+      <p className="text-center text-xs text-slate-500">Thanh toán khi nhận hàng (COD).</p>
       {!isLoggedIn && (
         <p className="rounded-xl bg-slate-100 p-3 text-center text-sm text-slate-700">
           Giỏ hàng của bạn đang được lưu trên trình duyệt. Hãy{' '}
           <Link
             to="/dang-nhap"
-            state={{ from: location }}
+            // Đăng nhập xong đi thẳng tới bước đặt hàng (giỏ tạm được gộp vào tài khoản trong lúc đó)
+            state={{ from: { pathname: '/dat-hang' } }}
             className="font-semibold text-brand-600 hover:underline"
           >
             đăng nhập

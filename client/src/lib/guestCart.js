@@ -78,6 +78,14 @@ export const saveGuestItems = (items) => {
 
 export const clearGuestItems = () => saveGuestItems([]);
 
+// Cờ "đang gộp giỏ tạm vào tài khoản" (CartSync bật/tắt). Trang đặt hàng dựa vào đây để chờ gộp xong rồi mới kết luận giỏ có trống hay không
+let merging = false;
+export const getMerging = () => merging;
+export const setMerging = (value) => {
+  merging = value;
+  notify();
+};
+
 export const subscribeGuestCart = (listener) => {
   listeners.add(listener);
   // Tab khác đổi giỏ thì tab này cập nhật theo
@@ -113,6 +121,7 @@ export const guestTotalQuantity = (items) => items.reduce((sum, entry) => sum + 
 export const resetGuestCartForTests = () => {
   storageBroken = false;
   memoryRaw = null;
+  merging = false;
   cache = { raw: undefined, items: EMPTY_GUEST_ITEMS };
   listeners.clear();
 };

@@ -28,7 +28,7 @@ const productInclude = {
   images: { orderBy: [{ sortOrder: 'asc' }, { id: 'asc' }], take: 1, select: { url: true } },
 };
 
-const isVisible = (product) =>
+export const isVisible = (product) =>
   product.isActive && product.category.isActive && product.brand.isActive;
 
 const lineStatus = (item) => {

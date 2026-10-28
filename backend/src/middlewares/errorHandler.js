@@ -27,7 +27,9 @@ export const errorHandler = (err, _req, res, _next) => {
 
   // Lỗi nghiệp vụ do mình chủ động ném ra
   if (err instanceof AppError) {
-    return res.status(err.statusCode).json({ error: { code: err.code, message: err.message } });
+    return res
+      .status(err.statusCode)
+      .json({ error: { code: err.code, message: err.message, details: err.details } });
   }
 
   // Body JSON bị sai cú pháp
