@@ -8,6 +8,7 @@ import { Link, Outlet, useLocation } from 'react-router-dom';
 import { IconBag, IconCompare, Logo, ThemeToggle } from '@techstore/shared';
 import { useCart } from '../hooks/useCart.js'; // [F05]
 import { useCompare } from '../context/CompareContext.jsx'; // [F12]
+import CartSync from './cart/CartSync.jsx'; // [F05]
 import CompareBar from './compare/CompareBar.jsx'; // [F12]
 import AccountMenu from './layout/AccountMenu.jsx';
 import BackToTop from './layout/BackToTop.jsx'; // [F12]
@@ -49,7 +50,7 @@ function Header() {
               </span>
             )}
           </Link>
-          {/* [F05] Biểu tượng giỏ hàng kèm tổng số lượng (US-14 AC4); chưa đăng nhập thì dẫn tới đăng nhập */}
+          {/* [F05] Biểu tượng giỏ hàng kèm tổng số lượng (US-14 AC4), cả khi chưa đăng nhập */}
           <Link
             to="/gio-hang"
             aria-label={`Giỏ hàng (${totalQuantity})`}
@@ -90,6 +91,7 @@ export default function Layout() {
     // Chừa chỗ cuối trang cho thanh so sánh cố định để nó không che chân trang
     <div className={`flex min-h-screen flex-col ${items.length > 0 ? 'pb-[4.5rem]' : ''}`}>
       <ScrollToTop />
+      <CartSync />
       <Header />
       <main className="mx-auto w-full max-w-7xl flex-1 px-4 py-8">
         <Outlet />

@@ -496,3 +496,272 @@ describe('clearCart (dùng ở F06 sau khi đặt hàng)', () => {
     expect((await getCart(b.token)).body.items).toHaveLength(1);
   });
 });
+
+// ---------------------------------------------------------------------------
+// Giỏ của khách chưa đăng nhập: xem trước (công khai) và gộp khi đăng nhập
+// ---------------------------------------------------------------------------
+const preview = (items) => request(app).post('/api/cart/preview').send({ items });
+const merge = (token, items) =>
+  request(app).post('/api/cart/merge').set(auth(token)).send({ items });
+
+describe('Xem trước giỏ của khách (POST /api/cart/preview, công khai)', () => {
+  it('không cần đăng nhập, tính giá hiện hành, thành tiền, tồn kho và trạng thái từng dòng', async () => {
+    const a = await makeProduct({ price: 20000000, salePrice: 18000000, stock: 4 });
+    const b = await makeProduct({ price: 1000000, stock: 9 });
+
+    const res = await preview([
+      { productId: a.id, quantity: 2 },
+      { productId: b.id, quantity: 1 },
+    ]);
+
+    expect(res.status).toBe(200);
+    expect(res.body.items).toHaveLength(2);
+    expect(res.body.items[0]).toMatchObject({
+      id: a.id, // giỏ của khách dùng id sản phẩm làm id dòng
+      productId: a.id,
+      quantity: 2,
+      unitPrice: 18000000,
+      lineTotal: 36000000,
+      stock: 4,
+      status: 'OK',
+    });
+    expect(res.body).toMatchObject({
+      totalQuantity: 3,
+      subtotal: 37000000,
+      canCheckout: true,
+    });
+  });
+
+  it('không ghi gì vào CSDL (không tạo giỏ)', async () => {
+    const product = await makeProduct();
+
+    await preview([{ productId: product.id, quantity: 1 }]);
+
+    expect(await prisma.cart.count()).toBe(0);
+    expect(await prisma.cartItem.count()).toBe(0);
+  });
+
+  it('danh sách rỗng thì trả giỏ trống', async () => {
+    const res = await preview([]);
+
+    expect(res.status).toBe(200);
+    expect(res.body).toEqual({ items: [], totalQuantity: 0, subtotal: 0, canCheckout: false });
+  });
+
+  it('giữ thứ tự khách gửi lên; sản phẩm trùng thì cộng số lượng', async () => {
+    const a = await makeProduct();
+    const b = await makeProduct();
+
+    const res = await preview([
+      { productId: b.id, quantity: 1 },
+      { productId: a.id, quantity: 2 },
+      { productId: b.id, quantity: 3 },
+    ]);
+
+    expect(res.body.items.map((item) => [item.productId, item.quantity])).toEqual([
+      [b.id, 4],
+      [a.id, 2],
+    ]);
+  });
+
+  it('sản phẩm không tồn tại bị bỏ qua, không làm hỏng cả giỏ', async () => {
+    const product = await makeProduct();
+
+    const res = await preview([
+      { productId: 9999, quantity: 1 },
+      { productId: product.id, quantity: 1 },
+    ]);
+
+    expect(res.status).toBe(200);
+    expect(res.body.items.map((item) => item.productId)).toEqual([product.id]);
+  });
+
+  it('đánh dấu sản phẩm bị ẩn, hết hàng, vượt tồn kho; tổng tiền chỉ cộng dòng mua được', async () => {
+    const good = await makeProduct({ price: 1000000, stock: 5 });
+    const hidden = await makeProduct({ isActive: false });
+    const soldOut = await makeProduct({ stock: 0 });
+    const tooMany = await makeProduct({ stock: 2 });
+
+    const res = await preview([
+      { productId: good.id, quantity: 2 },
+      { productId: hidden.id, quantity: 1 },
+      { productId: soldOut.id, quantity: 1 },
+      { productId: tooMany.id, quantity: 5 },
+    ]);
+
+    expect(res.body.items.map((item) => item.status)).toEqual([
+      'OK',
+      'UNAVAILABLE',
+      'OUT_OF_STOCK',
+      'EXCEEDS_STOCK',
+    ]);
+    expect(res.body.subtotal).toBe(2000000);
+    expect(res.body.canCheckout).toBe(false);
+  });
+
+  it.each([
+    ['thiếu items', {}],
+    ['items không phải mảng', { items: 'abc' }],
+    ['productId sai', { items: [{ productId: 0, quantity: 1 }] }],
+    ['productId là chuỗi', { items: [{ productId: '1', quantity: 1 }] }],
+    ['thiếu số lượng', { items: [{ productId: 1 }] }],
+    ['số lượng bằng 0', { items: [{ productId: 1, quantity: 0 }] }],
+    ['số lượng quá lớn', { items: [{ productId: 1, quantity: 100 }] }],
+  ])('%s thì 400', async (_name, body) => {
+    const res = await request(app).post('/api/cart/preview').send(body);
+
+    expect(res.status).toBe(400);
+    expect(res.body.error.code).toBe('VALIDATION_ERROR');
+  });
+
+  it('chặn danh sách quá dài (tối đa 50 sản phẩm) để API công khai không bị lạm dụng', async () => {
+    const items = Array.from({ length: 51 }, (_unused, index) => ({
+      productId: index + 1,
+      quantity: 1,
+    }));
+
+    expect((await preview(items)).status).toBe(400);
+    expect((await preview(items.slice(0, 50))).status).toBe(200);
+  });
+});
+
+describe('Gộp giỏ của khách vào tài khoản (POST /api/cart/merge)', () => {
+  it('yêu cầu đăng nhập', async () => {
+    const res = await request(app).post('/api/cart/merge').send({ items: [] });
+
+    expect(res.status).toBe(401);
+  });
+
+  it('gộp vào giỏ trống: thêm đủ các sản phẩm, không có ghi chú', async () => {
+    const { token } = await signIn();
+    const a = await makeProduct({ stock: 5 });
+    const b = await makeProduct({ stock: 5 });
+
+    const res = await merge(token, [
+      { productId: a.id, quantity: 2 },
+      { productId: b.id, quantity: 1 },
+    ]);
+
+    expect(res.status).toBe(200);
+    expect(res.body.notes).toEqual([]);
+    expect(res.body.cart.items.map((item) => [item.productId, item.quantity])).toEqual([
+      [a.id, 2],
+      [b.id, 1],
+    ]);
+    expect(res.body.cart.totalQuantity).toBe(3);
+  });
+
+  it('cộng dồn vào sản phẩm đã có trong giỏ tài khoản', async () => {
+    const { token } = await signIn();
+    const product = await makeProduct({ stock: 10 });
+    await addItem(token, { productId: product.id, quantity: 3 });
+
+    const res = await merge(token, [{ productId: product.id, quantity: 2 }]);
+
+    expect(res.body.cart.items).toHaveLength(1);
+    expect(res.body.cart.items[0].quantity).toBe(5);
+  });
+
+  it('thiếu tồn kho thì thêm tối đa số còn được phép và ghi chú lại, không báo lỗi', async () => {
+    const { token } = await signIn();
+    const product = await makeProduct({ stock: 5, name: 'Máy A' });
+    await addItem(token, { productId: product.id, quantity: 3 });
+
+    const res = await merge(token, [{ productId: product.id, quantity: 4 }]);
+
+    expect(res.status).toBe(200);
+    expect(res.body.cart.items[0].quantity).toBe(5); // chỉ cộng thêm 2 (còn lại 5 - 3)
+    expect(res.body.notes).toEqual(['Máy A: chỉ thêm được 2 trên 4 sản phẩm vì tồn kho không đủ']);
+  });
+
+  it('giỏ tài khoản đã đủ tồn kho hoặc hết hàng thì không thêm gì và ghi chú', async () => {
+    const { token } = await signIn();
+    const full = await makeProduct({ stock: 3, name: 'Máy đầy' });
+    const soldOut = await makeProduct({ stock: 0, name: 'Máy hết' });
+    await addItem(token, { productId: full.id, quantity: 3 });
+
+    const res = await merge(token, [
+      { productId: full.id, quantity: 1 },
+      { productId: soldOut.id, quantity: 2 },
+    ]);
+
+    expect(res.body.cart.items).toHaveLength(1);
+    expect(res.body.cart.items[0].quantity).toBe(3);
+    expect(res.body.notes).toHaveLength(2);
+    expect(res.body.notes[0]).toContain('Máy đầy: không thêm được');
+    expect(res.body.notes[1]).toContain('Máy hết: không thêm được');
+  });
+
+  it('bỏ qua sản phẩm đã ẩn hoặc không tồn tại và báo số lượng bị bỏ qua (không lộ tên)', async () => {
+    const { token } = await signIn();
+    const good = await makeProduct();
+    const hidden = await makeProduct({ isActive: false, name: 'Hàng ẩn bí mật' });
+
+    const res = await merge(token, [
+      { productId: good.id, quantity: 1 },
+      { productId: hidden.id, quantity: 1 },
+      { productId: 9999, quantity: 1 },
+    ]);
+
+    expect(res.body.cart.items.map((item) => item.productId)).toEqual([good.id]);
+    expect(res.body.notes).toEqual([
+      '2 sản phẩm trong giỏ tạm không còn được bán nên không được thêm vào giỏ',
+    ]);
+    expect(JSON.stringify(res.body)).not.toContain('Hàng ẩn bí mật');
+  });
+
+  it('mục trùng sản phẩm trong danh sách gửi lên được cộng lại trước khi gộp', async () => {
+    const { token } = await signIn();
+    const product = await makeProduct({ stock: 10 });
+
+    const res = await merge(token, [
+      { productId: product.id, quantity: 2 },
+      { productId: product.id, quantity: 3 },
+    ]);
+
+    expect(res.body.cart.items[0].quantity).toBe(5);
+  });
+
+  it('danh sách rỗng thì giữ nguyên giỏ tài khoản', async () => {
+    const { token } = await signIn();
+    const product = await makeProduct();
+    await addItem(token, { productId: product.id, quantity: 2 });
+
+    const res = await merge(token, []);
+
+    expect(res.status).toBe(200);
+    expect(res.body.cart.totalQuantity).toBe(2);
+    expect(res.body.notes).toEqual([]);
+  });
+
+  it('chỉ ảnh hưởng giỏ của chính người đăng nhập', async () => {
+    const a = await signIn('a@example.com');
+    const b = await signIn('b@example.com');
+    const product = await makeProduct();
+
+    await merge(a.token, [{ productId: product.id, quantity: 2 }]);
+
+    expect((await getCart(b.token)).body.items).toEqual([]);
+    expect((await getCart(a.token)).body.totalQuantity).toBe(2);
+  });
+
+  it('kiểm tra dữ liệu gửi lên: số lượng sai thì 400', async () => {
+    const { token } = await signIn();
+
+    expect((await merge(token, [{ productId: 1, quantity: 0 }])).status).toBe(400);
+    expect((await request(app).post('/api/cart/merge').set(auth(token)).send({})).status).toBe(400);
+  });
+
+  it('gộp đồng thời hai lần không bao giờ vượt tồn kho (tồn 3, hai lần gộp 2 sản phẩm)', async () => {
+    const { token } = await signIn();
+    const product = await makeProduct({ stock: 3 });
+
+    await Promise.all([
+      merge(token, [{ productId: product.id, quantity: 2 }]),
+      merge(token, [{ productId: product.id, quantity: 2 }]),
+    ]);
+
+    const item = await prisma.cartItem.findFirst();
+    expect(item.quantity).toBeLessThanOrEqual(3);
+  });
+});

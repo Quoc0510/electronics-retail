@@ -1,4 +1,4 @@
-# Thiết kế hệ thống (SDD) - TechStore
+| `useCart` | Dùng chung cho khách đã và chưa đăng nhập (xem mục "Giỏ của khách" bên dưới). Với tài khoản: truy vấn giỏ bằng React Query# Thiết kế hệ thống (SDD) - TechStore
 
 Phục vụ rubric TC2.1. Sơ đồ dùng Mermaid (GitHub tự hiển thị). Mọi sơ đồ phải khớp mã nguồn: khi đổi code hoặc schema, cập nhật lại tài liệu này trong cùng commit.
 
@@ -271,9 +271,10 @@ Môi trường local: `docker-compose.yml` chạy PostgreSQL; backend và hai fr
 
 ## 8. Nhật ký thay đổi thiết kế
 
-| Ngày       | Thay đổi                                                                              | Lý do                                          |
-| ---------- | ------------------------------------------------------------------------------------- | ---------------------------------------------- |
-| 21/10/2026 | Chốt schema ban đầu F00–F07; không dùng biến thể sản phẩm; giỏ hàng yêu cầu đăng nhập | Phù hợp quy mô 6 tuần, giảm rủi ro trễ tiến độ |
+| Ngày       | Thay đổi                                                                                                                                                       | Lý do                                                                                      |
+| ---------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------ |
+| 21/10/2026 | Chốt schema ban đầu F00–F07; không dùng biến thể sản phẩm; giỏ hàng yêu cầu đăng nhập                                                                          | Phù hợp quy mô 6 tuần, giảm rủi ro trễ tiến độ                                             |
+| 28/10/2026 | Giỏ hàng cho khách chưa đăng nhập (lưu trên trình duyệt, gộp vào tài khoản khi đăng nhập); thêm `POST /api/cart/preview` (công khai) và `POST /api/cart/merge` | Phản hồi người dùng thử: bắt đăng nhập ngay khi thêm vào giỏ gây cản trở; không đổi schema |
 
 ## 9. Danh sách API đã triển khai
 
@@ -378,14 +379,16 @@ Quyết định thiết kế F04:
 - Chi tiết dùng **slug** (không dùng id) để đường dẫn dễ đọc, chia sẻ được.
 - Hạn chế đã biết của tìm kiếm: chưa bỏ dấu tiếng Việt (gõ "dien thoai" không ra "Điện thoại"), xem [TECH_DEBT.md](TECH_DEBT.md).
 
-### F05 - Giỏ hàng (cần đăng nhập, BR-11)
+### F05 - Giỏ hàng (giỏ tài khoản cần đăng nhập; giỏ khách lưu trên trình duyệt)
 
-| Method | Đường dẫn           | Mô tả                                                         | User story |
-| ------ | ------------------- | ------------------------------------------------------------- | ---------- |
-| GET    | /api/cart           | Giỏ của người dùng (tạo nếu chưa có) đã tính lại tổng tiền    | US-14      |
-| POST   | /api/cart/items     | `{ productId, quantity = 1 }`: thêm, đã có thì cộng dồn       | US-14      |
-| PATCH  | /api/cart/items/:id | `{ quantity }`: đặt số lượng mới của một dòng (1 đến tồn kho) | US-15      |
-| DELETE | /api/cart/items/:id | Xóa một dòng khỏi giỏ                                         | US-15      |
+| Method | Đường dẫn           | Mô tả                                                                                    | User story |
+| ------ | ------------------- | ---------------------------------------------------------------------------------------- | ---------- |
+| GET    | /api/cart           | Giỏ của người dùng (tạo nếu chưa có) đã tính lại tổng tiền                               | US-14      |
+| POST   | /api/cart/items     | `{ productId, quantity = 1 }`: thêm, đã có thì cộng dồn                                  | US-14      |
+| PATCH  | /api/cart/items/:id | `{ quantity }`: đặt số lượng mới của một dòng (1 đến tồn kho)                            | US-15      |
+| POST   | /api/cart/merge     | Gộp giỏ của khách vào giỏ tài khoản sau khi đăng nhập (xem bên dưới)                     | US-14      |
+| POST   | /api/cart/preview   | **Công khai.** Tính giá, tồn kho, trạng thái cho giỏ lưu trên trình duyệt (xem bên dưới) | US-14      |
+| DELETE | /api/cart/items/:id | Xóa một dòng khỏi giỏ                                                                    | US-15      |
 
 Mọi thao tác đều trả về **toàn bộ giỏ** để giao diện cập nhật ngay:
 
@@ -410,6 +413,10 @@ Quyết định thiết kế F05:
 - **Dòng của người khác trả 404**, không phải 403, để không lộ id dòng của giỏ khác (kiểm tra quyền sở hữu ngay trong truy vấn).
 - **Giỏ hàng không giữ chỗ tồn kho:** tồn kho có thể đổi sau khi thêm, nên mỗi dòng có `status` và việc kiểm tra bắt buộc cuối cùng nằm ở lúc đặt hàng (F06). Giá luôn lấy hiện tại, giỏ không lưu giá cũ (BR-04 chỉ áp dụng cho đơn hàng).
 - Giới hạn 99 sản phẩm mỗi dòng để chặn số vô lý trước khi chạm CSDL.
+- **Giỏ của khách (điều chỉnh 28/10/2026):** trình duyệt chỉ lưu `{ productId, quantity }`; giá, tồn kho và trạng thái luôn do máy chủ tính nên không bao giờ cũ.
+  - `POST /api/cart/preview` nhận `{ items: [{ productId, quantity }] }` (tối đa 50 mục, mỗi mục 1 đến 99), trả cùng dạng giỏ như `GET /api/cart` nhưng id dòng là id sản phẩm. **Không ghi CSDL.** Sản phẩm không tồn tại bị bỏ qua, mục trùng được cộng số lượng. Đây là API công khai duy nhất của giỏ nên giới hạn kích thước danh sách để không bị lạm dụng.
+  - `POST /api/cart/merge` (cần đăng nhập) nhận cùng dạng dữ liệu, trả `{ cart, notes }`. Khác với thêm từng sản phẩm, gộp **không báo lỗi khi thiếu hàng** mà thêm tối đa số lượng còn được phép và ghi chú lại (khách không nên mất cả giỏ vì một món hết hàng). Sản phẩm đã ẩn bị bỏ qua và chỉ báo số lượng, không lộ tên.
+  - Cả thêm từng sản phẩm lẫn gộp dùng chung hàm `applyAdd` (cộng dồn bằng UPDATE có điều kiện tồn kho) nên BR-03 được đảm bảo như nhau.
 - `clearCart(userId, db)` sẵn sàng cho F06 xóa giỏ trong cùng transaction với việc tạo đơn.
 
 ### Quyết định bảo mật của F01
@@ -595,3 +602,11 @@ Thương hiệu nổi bật, banner đôi (chỉ hiện nếu danh mục tương
 - Phí vận chuyển ở `lib/shipping.js` là **ước tính**; giá trị cuối cùng do backend tính khi đặt hàng (F06). Hai nơi cùng áp BR-05 nên nếu quy tắc đổi phải sửa cả hai.
 - Nút "Đặt hàng" đang bị khóa kèm ghi chú "sắp ra mắt" cho tới khi làm F06.
 - Trên điện thoại hẹp, nút đổi giao diện sáng/tối chuyển xuống chân trang để đầu trang chứa vừa biểu tượng giỏ trên một hàng.
+
+### Giỏ của khách chưa đăng nhập
+
+- **Lưu trữ:** `lib/guestCart.js` giữ `{ productId, quantity }` ở localStorage dưới dạng store nhỏ cho `useSyncExternalStore` (snapshot ổn định, đồng bộ giữa các tab qua sự kiện `storage`, tự lọc dữ liệu hỏng, vẫn chạy trong bộ nhớ nếu localStorage bị chặn).
+- **Quy tắc tồn kho như giỏ tài khoản:** mỗi thao tác (thêm, sửa) hỏi `POST /cart/preview` với danh sách _sau khi đổi_, kiểm tra riêng dòng bị đổi (không còn bán, hết hàng, vượt tồn kho kèm "bạn đã có n") rồi mới lưu. Xóa thì lưu rồi hỏi lại giỏ còn lại.
+- **Dọn dữ liệu cũ:** sản phẩm đã bị xóa hẳn khỏi cửa hàng không còn trong kết quả xem trước nên tự bị dọn khỏi trình duyệt.
+- **Gộp khi đăng nhập:** `CartSync` (gắn trong Layout) thấy người dùng vừa đăng nhập hoặc đăng ký mà còn giỏ tạm thì gọi `POST /cart/merge`, ghi giỏ trả về vào cache, xóa giỏ tạm. Gộp lỗi (mất mạng) thì **giữ giỏ tạm** để thử lại lần tải trang sau. Ghi chú gộp (`lib/cartNotice.js`, sessionStorage) được trang giỏ hàng hiện kèm nút "Đã hiểu".
+- Biểu tượng giỏ ở đầu trang hiện ngay tổng số lượng từ bộ nhớ, không chờ mạng. Trang `/gio-hang` giờ là trang công khai; ở tóm tắt đơn hàng có lời nhắc đăng nhập để đặt hàng (F06).
