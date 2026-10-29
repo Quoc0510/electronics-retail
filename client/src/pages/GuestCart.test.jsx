@@ -29,6 +29,7 @@ import {
 import {
   apiError,
   customer,
+  emptyReviews,
   mockServer,
   renderApp,
   session,
@@ -130,6 +131,7 @@ const handlers = (extra = {}) => ({
     200,
     { ...product(7), sku: 'IP15', description: null, specs: {}, images: [] },
   ],
+  'GET /products/iphone-15/reviews': [200, emptyReviews],
   'POST /cart/preview': previewHandler(),
   ...extra,
 });

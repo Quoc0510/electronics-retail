@@ -8,7 +8,12 @@ import request from 'supertest';
 import { randomUUID } from 'node:crypto';
 import { app } from '../src/app.js';
 import { prisma } from '../src/lib/prisma.js';
-import { calculatePoints } from '../src/lib/points.js';
+import {
+  POINT_UNIT_VND,
+  amountToNextPoint,
+  calculatePoints,
+  pointsForSpent,
+} from '../src/lib/points.js';
 import { createUser, loginAs, resetDatabase } from './helpers.js';
 
 beforeEach(resetDatabase);
@@ -82,6 +87,12 @@ const memberOrder = async (buyer, product, quantity = 1) => {
   const res = await request(app).post('/api/orders').set(auth(buyer.token)).send({ shipping });
   expect(res.status).toBe(201);
   return res.body;
+};
+
+// Điểm và tổng đã mua hiện có của một thành viên (đọc thẳng từ DB)
+const memberStats = async (buyer) => {
+  const { points, totalSpent } = await prisma.user.findUnique({ where: { id: buyer.user.id } });
+  return { points, totalSpent };
 };
 
 const adminSetStatus = (token, code, status, note) =>
@@ -440,13 +451,48 @@ describe('POST /api/orders/lookup/cancel - khách vãng lai tự hủy đơn (BR
 // Điểm thành viên (BR-15)
 // ---------------------------------------------------------------------------
 describe('Quy tắc tính điểm (BR-15)', () => {
-  it('mỗi 10.000 đ được 1 điểm, làm tròn xuống, không âm', () => {
-    expect(calculatePoints(0)).toBe(0);
-    expect(calculatePoints(9999)).toBe(0);
-    expect(calculatePoints(10000)).toBe(1);
-    expect(calculatePoints(15000)).toBe(1);
-    expect(calculatePoints(2350000)).toBe(235);
-    expect(calculatePoints(-5000)).toBe(0);
+  it('điểm theo tổng đã mua: mỗi 1.000.000 đ được 1 điểm, làm tròn xuống, không âm', () => {
+    expect(POINT_UNIT_VND).toBe(1_000_000);
+    expect(pointsForSpent(0)).toBe(0);
+    expect(pointsForSpent(999_999)).toBe(0);
+    expect(pointsForSpent(1_000_000)).toBe(1);
+    expect(pointsForSpent(1_999_999)).toBe(1);
+    expect(pointsForSpent(54_980_000)).toBe(54);
+    expect(pointsForSpent(-5_000_000)).toBe(0);
+  });
+
+  it('điểm của một đơn là phần tăng thêm sau khi cộng đơn vào tổng đã mua (phần lẻ không mất)', () => {
+    expect(calculatePoints(0, 999_999)).toBe(0);
+    expect(calculatePoints(0, 1_000_000)).toBe(1);
+    expect(calculatePoints(0, 2_350_000)).toBe(2);
+    // Đơn 600.000 liên tiếp: điểm đầu tiên đến ở đơn thứ hai, rồi ở đơn thứ tư
+    expect(calculatePoints(0, 600_000)).toBe(0);
+    expect(calculatePoints(600_000, 600_000)).toBe(1);
+    expect(calculatePoints(1_200_000, 600_000)).toBe(0);
+    expect(calculatePoints(1_800_000, 600_000)).toBe(1);
+    // Một đơn lớn vượt nhiều mốc cùng lúc
+    expect(calculatePoints(900_000, 3_200_000)).toBe(4); // 4,1tr: từ 0 lên 4
+    // Giá trị âm bị coi là 0
+    expect(calculatePoints(-1, -1)).toBe(0);
+  });
+
+  it('tổng các điểm từng đơn luôn bằng điểm của tổng (không phụ thuộc cách chia đơn)', () => {
+    const orders = [450_000, 1_250_000, 90_000, 2_800_000, 999_999, 1];
+    let spent = 0;
+    let sum = 0;
+    for (const subtotal of orders) {
+      sum += calculatePoints(spent, subtotal);
+      spent += subtotal;
+    }
+    expect(sum).toBe(pointsForSpent(spent));
+  });
+
+  it('còn thiếu bao nhiêu để được điểm kế tiếp', () => {
+    expect(amountToNextPoint(0)).toBe(1_000_000);
+    expect(amountToNextPoint(1)).toBe(999_999);
+    expect(amountToNextPoint(999_999)).toBe(1);
+    expect(amountToNextPoint(1_000_000)).toBe(1_000_000);
+    expect(amountToNextPoint(54_980_000)).toBe(20_000);
   });
 
   it('bản ở shared (hiển thị điểm dự kiến) giống hệt bản của backend (nơi quyết định)', async () => {
@@ -454,8 +500,14 @@ describe('Quy tắc tính điểm (BR-15)', () => {
     const backend = await import('../src/lib/points.js');
 
     expect(shared.POINT_UNIT_VND).toBe(backend.POINT_UNIT_VND);
-    for (const amount of [0, 9999, 10000, 15000, 123456, 5000000]) {
-      expect(shared.calculatePoints(amount)).toBe(backend.calculatePoints(amount));
+    for (const amount of [0, 9999, 999_999, 1_000_000, 1_500_000, 5_000_000, 54_980_000]) {
+      expect(shared.pointsForSpent(amount)).toBe(backend.pointsForSpent(amount));
+      expect(shared.amountToNextPoint(amount)).toBe(backend.amountToNextPoint(amount));
+      for (const subtotal of [0, 1, 600_000, 1_000_000, 3_200_000]) {
+        expect(shared.calculatePoints(amount, subtotal)).toBe(
+          backend.calculatePoints(amount, subtotal),
+        );
+      }
     }
   });
 });
@@ -467,8 +519,8 @@ describe('Cộng điểm thành viên khi đơn hoàn thành (BR-15)', () => {
     const product = await makeProduct({ price: 1175000 });
 
     const placed = await memberOrder(buyer, product, 2); // tiền hàng 2.350.000, ship 30.000
-    expect(placed).toMatchObject({ isGuest: false, pointsExpected: 235, pointsEarned: 0 });
-    expect((await prisma.user.findUnique({ where: { id: buyer.user.id } })).points).toBe(0);
+    expect(placed).toMatchObject({ isGuest: false, pointsExpected: 2, pointsEarned: 0 });
+    expect(await memberStats(buyer)).toEqual({ points: 0, totalSpent: 0 });
 
     await advance(admin, placed.code, 'CONFIRMED', 'SHIPPING');
     const done = await adminSetStatus(admin.token, placed.code, 'COMPLETED');
@@ -476,36 +528,82 @@ describe('Cộng điểm thành viên khi đơn hoàn thành (BR-15)', () => {
     expect(done.status).toBe(200);
     expect(done.body).toMatchObject({
       paymentStatus: 'PAID',
-      pointsEarned: 235,
+      pointsEarned: 2,
       pointsExpected: 0,
     });
-    expect((await prisma.user.findUnique({ where: { id: buyer.user.id } })).points).toBe(235);
+    // Tổng đã mua chỉ gồm tiền hàng, không gồm phí vận chuyển
+    expect(await memberStats(buyer)).toEqual({ points: 2, totalSpent: 2_350_000 });
   });
 
-  it('điểm cộng dồn qua nhiều đơn và hiện trong hồ sơ /users/me', async () => {
+  it('điểm cộng dồn qua nhiều đơn: phần lẻ của đơn trước không mất, hiện trong hồ sơ /users/me', async () => {
     const admin = await signIn('admin@example.com', 'ADMIN');
     const buyer = await signIn('khach@example.com');
-    const product = await makeProduct({ price: 1000000 });
+    const product = await makeProduct({ price: 600000 });
 
-    for (let i = 0; i < 2; i += 1) {
+    const earned = [];
+    for (let i = 0; i < 4; i += 1) {
       const placed = await memberOrder(buyer, product, 1);
       await advance(admin, placed.code, 'CONFIRMED', 'SHIPPING', 'COMPLETED');
+      earned.push((await prisma.order.findUnique({ where: { code: placed.code } })).pointsEarned);
     }
 
+    // 600k, 1,2tr, 1,8tr, 2,4tr: điểm đến ở đơn thứ hai và thứ tư
+    expect(earned).toEqual([0, 1, 0, 1]);
     const me = await request(app).get('/api/users/me').set(auth(buyer.token));
-    expect(me.body.points).toBe(200);
+    expect(me.body).toMatchObject({ points: 2, totalSpent: 2_400_000 });
   });
 
-  it('đơn dưới 10.000 đ tiền hàng thì không có điểm', async () => {
+  it('điểm dự kiến của đơn đang xử lý tính trên tổng đã mua hiện tại', async () => {
     const admin = await signIn('admin@example.com', 'ADMIN');
     const buyer = await signIn('khach@example.com');
-    const product = await makeProduct({ price: 9000 });
+    const product = await makeProduct({ price: 600000 });
+    const first = await memberOrder(buyer, product, 1);
+    expect(first.pointsExpected).toBe(0); // 600k chưa đủ 1 triệu
+    await advance(admin, first.code, 'CONFIRMED', 'SHIPPING', 'COMPLETED');
+
+    const second = await memberOrder(buyer, product, 1);
+
+    expect(second.pointsExpected).toBe(1); // 600k đã mua + 600k = 1,2tr
+    const viewed = await request(app).get(`/api/orders/${second.code}`).set(auth(buyer.token));
+    expect(viewed.body.pointsExpected).toBe(1);
+    const adminView = await request(app)
+      .get(`/api/admin/orders/${second.code}`)
+      .set(auth(admin.token));
+    expect(adminView.body).toMatchObject({ pointsExpected: 1, customer: { points: 0 } });
+  });
+
+  it('đơn dưới 1.000.000 đ tiền hàng chưa có điểm nhưng vẫn được cộng vào tổng đã mua', async () => {
+    const admin = await signIn('admin@example.com', 'ADMIN');
+    const buyer = await signIn('khach@example.com');
+    const product = await makeProduct({ price: 900000 });
 
     const placed = await memberOrder(buyer, product, 1);
     await advance(admin, placed.code, 'CONFIRMED', 'SHIPPING', 'COMPLETED');
 
-    expect((await prisma.user.findUnique({ where: { id: buyer.user.id } })).points).toBe(0);
+    expect(await memberStats(buyer)).toEqual({ points: 0, totalSpent: 900_000 });
     expect((await prisma.order.findUnique({ where: { code: placed.code } })).pointsEarned).toBe(0);
+  });
+
+  it('hai đơn của cùng một người hoàn thành đồng thời không làm mất phần lẻ của nhau', async () => {
+    const adminA = await signIn('admin-a@example.com', 'ADMIN');
+    const adminB = await signIn('admin-b@example.com', 'ADMIN');
+    const buyer = await signIn('khach@example.com');
+    const product = await makeProduct({ price: 600000 });
+    const one = await memberOrder(buyer, product, 1);
+    const two = await memberOrder(buyer, product, 1);
+    await advance(adminA, one.code, 'CONFIRMED', 'SHIPPING');
+    await advance(adminA, two.code, 'CONFIRMED', 'SHIPPING');
+
+    const results = await Promise.all([
+      adminSetStatus(adminA.token, one.code, 'COMPLETED'),
+      adminSetStatus(adminB.token, two.code, 'COMPLETED'),
+    ]);
+
+    expect(results.map((res) => res.status)).toEqual([200, 200]);
+    // 600k + 600k = 1,2tr: đúng một điểm cho cả hai đơn, dù ai về trước (nếu cả hai cùng đọc tổng cũ thì sẽ là 0)
+    expect(await memberStats(buyer)).toEqual({ points: 1, totalSpent: 1_200_000 });
+    const orders = await prisma.order.findMany({ where: { userId: buyer.user.id } });
+    expect(orders.reduce((sum, order) => sum + order.pointsEarned, 0)).toBe(1);
   });
 
   it('đơn bị hủy thì không có điểm', async () => {
@@ -522,7 +620,7 @@ describe('Cộng điểm thành viên khi đơn hoàn thành (BR-15)', () => {
     );
 
     expect(cancelled.body).toMatchObject({ pointsEarned: 0, pointsExpected: 0 });
-    expect((await prisma.user.findUnique({ where: { id: buyer.user.id } })).points).toBe(0);
+    expect(await memberStats(buyer)).toEqual({ points: 0, totalSpent: 0 });
   });
 
   it('đơn của khách vãng lai hoàn thành thì không cộng điểm cho ai', async () => {
@@ -535,9 +633,9 @@ describe('Cộng điểm thành viên khi đơn hoàn thành (BR-15)', () => {
 
     const order = await prisma.order.findUnique({ where: { code: placed.body.code } });
     expect(order).toMatchObject({ status: 'COMPLETED', pointsEarned: 0, userId: null });
-    const totals = await prisma.user.aggregate({ _sum: { points: true } });
-    expect(totals._sum.points).toBe(0);
-    expect((await prisma.user.findUnique({ where: { id: bystander.user.id } })).points).toBe(0);
+    const totals = await prisma.user.aggregate({ _sum: { points: true, totalSpent: true } });
+    expect(totals._sum).toEqual({ points: 0, totalSpent: 0 });
+    expect(await memberStats(bystander)).toEqual({ points: 0, totalSpent: 0 });
   });
 
   it('hai Admin cùng bấm Hoàn thành một lúc thì điểm chỉ được cộng một lần', async () => {
@@ -554,7 +652,8 @@ describe('Cộng điểm thành viên khi đơn hoàn thành (BR-15)', () => {
     ]);
 
     expect(results.map((res) => res.status).sort()).toEqual([200, 400]);
-    expect((await prisma.user.findUnique({ where: { id: buyer.user.id } })).points).toBe(100);
+    // Tổng đã mua cũng chỉ cộng một lần (không bị gấp đôi)
+    expect(await memberStats(buyer)).toEqual({ points: 1, totalSpent: 1_000_000 });
   });
 });
 

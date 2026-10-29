@@ -57,7 +57,7 @@ Cấu trúc thư mục backend khớp sơ đồ: `src/routes`, `src/controllers`
 
 ## 4. Sơ đồ thực thể - quan hệ (ERD)
 
-Khớp với `backend/prisma/schema.prisma` (các tính năng F00–F07 và F13). Review (F08), Wishlist (F08), Coupon (F09) chưa triển khai nên chưa có trong sơ đồ này.
+Khớp với `backend/prisma/schema.prisma` (các tính năng F00–F08 và F13). Coupon (F09) chưa triển khai nên chưa có trong sơ đồ này.
 
 ```mermaid
 erDiagram
@@ -74,6 +74,10 @@ erDiagram
     carts ||--o{ cart_items : "gồm"
     orders ||--o{ order_items : "gồm"
     orders ||--o{ order_status_history : "ghi lại"
+    users ||--o{ reviews : "viết"
+    products ||--o{ reviews : "có"
+    users ||--o{ wishlist_items : "lưu"
+    products ||--o{ wishlist_items : "được lưu trong"
 
     users {
         int id PK
@@ -84,6 +88,7 @@ erDiagram
         enum role "CUSTOMER, ADMIN"
         bool is_active
         int points "điểm thành viên, BR-15"
+        int total_spent "tổng tiền hàng đã mua, tính điểm cộng dồn"
     }
     refresh_tokens {
         int id PK
@@ -182,9 +187,22 @@ erDiagram
         string note
         int changed_by_id FK
     }
+    reviews {
+        int id PK
+        int product_id FK
+        int user_id FK
+        int rating "1 đến 5"
+        string comment "tối đa 500 ký tự"
+        boolean is_hidden
+    }
+    wishlist_items {
+        int id PK
+        int user_id FK
+        int product_id FK
+    }
 ```
 
-Ghi chú: ngoài các cột trên, hầu hết bảng còn có `created_at` và `updated_at`. Ràng buộc CHECK (tồn kho không âm, giá dương, số lượng ≥ 1, tiền không âm) nằm ở cuối file migration `20261021000000_init`; điểm không âm (F13) nằm ở `20261028000000_guest_checkout_points`.
+Ghi chú: ngoài các cột trên, hầu hết bảng còn có `created_at` và `updated_at`. Ràng buộc CHECK (tồn kho không âm, giá dương, số lượng ≥ 1, tiền không âm) nằm ở cuối file migration `20261021000000_init`; điểm không âm (F13) nằm ở `20261028000000_guest_checkout_points` và tổng đã mua không âm ở `20261029010000_points_cumulative`; số sao 1 đến 5 và bình luận tối đa 500 ký tự (F08) nằm ở `20261029000000_reviews_wishlist`, cùng ràng buộc UNIQUE `(product_id, user_id)` của đánh giá và `(user_id, product_id)` của yêu thích.
 
 ## 5. Sơ đồ tuần tự
 
@@ -305,13 +323,15 @@ Môi trường local: `docker-compose.yml` chạy PostgreSQL; backend và hai fr
 
 ## 8. Nhật ký thay đổi thiết kế
 
-| Ngày       | Thay đổi                                                                                                                                                                                                             | Lý do                                                                                                                   |
-| ---------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ----------------------------------------------------------------------------------------------------------------------- |
-| 21/10/2026 | Chốt schema ban đầu F00–F07; không dùng biến thể sản phẩm; giỏ hàng yêu cầu đăng nhập                                                                                                                                | Phù hợp quy mô 6 tuần, giảm rủi ro trễ tiến độ                                                                          |
-| 28/10/2026 | Giỏ hàng cho khách chưa đăng nhập (lưu trên trình duyệt, gộp vào tài khoản khi đăng nhập); thêm `POST /api/cart/preview` (công khai) và `POST /api/cart/merge`                                                       | Phản hồi người dùng thử: bắt đăng nhập ngay khi thêm vào giỏ gây cản trở; không đổi schema                              |
-| 28/10/2026 | Đặt hàng không cần đăng nhập (F13): `orders.user_id` cho phép rỗng, thêm `idempotency_key`, `points_earned`, `users.points`; tra cứu và hủy đơn bằng mã đơn + số điện thoại; cộng điểm thành viên khi đơn hoàn thành | Phản hồi người dùng thử lần hai: bắt đăng nhập mới được đặt hàng làm khách bỏ giỏ; mua hàng chỉ để tích điểm thành viên |
-| 28/10/2026 | Dashboard thống kê và quản lý người dùng (F10): `GET /api/admin/stats`, `GET /api/admin/users`, `PATCH /api/admin/users/:id/status`; không đổi schema                                                                | Hoàn thành chức năng bắt buộc F10 (US-26, US-27)                                                                        |
-| 28/10/2026 | `addresses.district` cho phép rỗng; địa chỉ ghép bỏ phần trống                                                                                                                                                       | Nhiều địa phương đã bỏ cấp quận/huyện nên không thể bắt khách nhập                                                      |
+| Ngày       | Thay đổi                                                                                                                                                                                                                                                                                                                  | Lý do                                                                                                                   |
+| ---------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ----------------------------------------------------------------------------------------------------------------------- |
+| 21/10/2026 | Chốt schema ban đầu F00–F07; không dùng biến thể sản phẩm; giỏ hàng yêu cầu đăng nhập                                                                                                                                                                                                                                     | Phù hợp quy mô 6 tuần, giảm rủi ro trễ tiến độ                                                                          |
+| 28/10/2026 | Giỏ hàng cho khách chưa đăng nhập (lưu trên trình duyệt, gộp vào tài khoản khi đăng nhập); thêm `POST /api/cart/preview` (công khai) và `POST /api/cart/merge`                                                                                                                                                            | Phản hồi người dùng thử: bắt đăng nhập ngay khi thêm vào giỏ gây cản trở; không đổi schema                              |
+| 28/10/2026 | Đặt hàng không cần đăng nhập (F13): `orders.user_id` cho phép rỗng, thêm `idempotency_key`, `points_earned`, `users.points`; tra cứu và hủy đơn bằng mã đơn + số điện thoại; cộng điểm thành viên khi đơn hoàn thành                                                                                                      | Phản hồi người dùng thử lần hai: bắt đăng nhập mới được đặt hàng làm khách bỏ giỏ; mua hàng chỉ để tích điểm thành viên |
+| 28/10/2026 | Dashboard thống kê và quản lý người dùng (F10): `GET /api/admin/stats`, `GET /api/admin/users`, `PATCH /api/admin/users/:id/status`; không đổi schema                                                                                                                                                                     | Hoàn thành chức năng bắt buộc F10 (US-26, US-27)                                                                        |
+| 29/10/2026 | Đánh giá và yêu thích (F08): bảng `reviews`, `wishlist_items` (migration `20261029000000_reviews_wishlist`); `GET/POST /api/products/:slug/reviews`, `GET/PATCH .../reviews/mine`, `GET /api/admin/reviews`, `PATCH /api/admin/reviews/:id/visibility`, `GET/PUT/DELETE /api/wishlist`; API sản phẩm thêm trường `rating` | Hoàn thành chức năng F08 (US-21, US-22, US-23)                                                                          |
+| 29/10/2026 | Đổi cách tính điểm thành viên (BR-15): cộng dồn theo tổng tiền hàng đã mua, 1.000.000 đ = 1 điểm; thêm `users.total_spent` (migration `20261029010000_points_cumulative` tính lại điểm của dữ liệu cũ); `GET /api/users/me` thêm `totalSpent`                                                                             | Yêu cầu của nhóm: điểm theo tổng giá trị mọi đơn hàng, không theo từng đơn                                              |
+| 28/10/2026 | `addresses.district` cho phép rỗng; địa chỉ ghép bỏ phần trống                                                                                                                                                                                                                                                            | Nhiều địa phương đã bỏ cấp quận/huyện nên không thể bắt khách nhập                                                      |
 
 ## 9. Danh sách API đã triển khai
 
@@ -490,7 +510,7 @@ Quyết định thiết kế F06:
 | POST   | /api/orders/lookup        | Công khai | Xem đơn của khách: `{ code, phone }` (giới hạn `ORDER_LOOKUP_RATE_LIMIT` lần/15 phút/IP)                                                     | US-33      |
 | POST   | /api/orders/lookup/cancel | Công khai | Khách tự hủy đơn: `{ code, phone, reason }`; chỉ khi đơn `PENDING`                                                                           | US-33      |
 
-Các API đơn hàng có thêm trong phần đơn trả về: `isGuest` (đơn không có chủ tài khoản), `pointsEarned` (điểm đã cộng, 0 khi chưa hoàn thành), `pointsExpected` (điểm sẽ nhận, chỉ với đơn thành viên đang xử lý). `GET /api/users/me` trả thêm `points`. Admin: dòng danh sách có `isGuest`, `pointsEarned`; chi tiết có `customer` là `null` với đơn khách và kèm `customer.points` với thành viên.
+Các API đơn hàng có thêm trong phần đơn trả về: `isGuest` (đơn không có chủ tài khoản), `pointsEarned` (điểm đã cộng, 0 khi chưa hoàn thành), `pointsExpected` (điểm sẽ nhận, chỉ với đơn thành viên đang xử lý). `GET /api/users/me` trả thêm `points` và `totalSpent`. Admin: dòng danh sách có `isGuest`, `pointsEarned`; chi tiết có `customer` là `null` với đơn khách và kèm `customer.points` với thành viên.
 
 Quyết định thiết kế F13:
 
@@ -499,7 +519,7 @@ Quyết định thiết kế F13:
 - **Tra cứu bằng mã đơn + số điện thoại (BR-16):** `findFirst({ code, phone, userId: null })`. Sai một trong hai đều trả cùng 404 nên không lộ đơn có tồn tại; điều kiện `userId: null` bảo đảm đơn của thành viên không bị xem qua đường này. Mã đơn có 32^4 khả năng mỗi ngày nên không đủ an toàn một mình, vì vậy kèm số điện thoại và giới hạn tần suất theo IP (xem nợ kỹ thuật #19).
 - **Số điện thoại không đưa lên đường dẫn:** Client nhớ số điện thoại của đơn vừa đặt hoặc vừa tra cứu trong `sessionStorage` (mất khi đóng tab); chưa có thì trang đơn chuyển sang trang tra cứu thay vì bắt đăng nhập.
 - **Hủy đơn của khách:** dùng chung `changeStatus` với thành viên (khóa dòng đơn, chỉ từ `PENDING`, hoàn kho đúng một lần); dòng lịch sử có `changed_by_id` rỗng.
-- **Điểm thành viên (BR-15):** `calculatePoints = floor(subtotal / 10.000)` (`lib/points.js`, bản sao ở `shared` để Client hiển thị điểm dự kiến, có test đối chiếu). Điểm được cộng trong chính `changeStatus` khi chuyển sang `COMPLETED`: dòng đơn đang bị `FOR UPDATE` và luồng trạng thái chỉ cho đi tới `COMPLETED` một lần nên hai Admin bấm cùng lúc cũng chỉ cộng một lần (có test). Ghi `orders.points_earned` để lịch sử đơn tự giải thích; `users.points` có `CHECK (points >= 0)`.
+- **Điểm thành viên (BR-15), cộng dồn:** điểm = `floor(total_spent / 1.000.000)` với `total_spent` là tổng tiền hàng của mọi đơn đã hoàn thành. Điểm của một đơn là phần tăng thêm sau khi cộng đơn vào tổng: `calculatePoints(spentBefore, subtotal) = pointsForSpent(spentBefore + subtotal) - pointsForSpent(spentBefore)` (`lib/points.js`, bản sao ở `shared` để Client hiển thị điểm dự kiến, có test đối chiếu); nhờ vậy phần lẻ không mất và tổng điểm của các đơn luôn bằng điểm của tổng (có test). Điểm được cộng trong chính `changeStatus` khi chuyển sang `COMPLETED`: dòng đơn đang bị `FOR UPDATE` và luồng trạng thái chỉ cho đi tới `COMPLETED` một lần nên hai Admin bấm cùng lúc cũng chỉ cộng một lần (có test). Tổng đã mua được cộng bằng một `UPDATE ... SET total_spent = total_spent + n RETURNING` nguyên tử trên dòng người dùng, nên hai đơn của cùng một người hoàn thành đồng thời xếp hàng chờ nhau và mỗi đơn thấy đúng tổng trước đó (nếu cùng đọc tổng cũ thì cả hai đều tính 0 và mất điểm; có test chạy song song). `pointsExpected` của đơn đang xử lý chỉ là ước tính trên tổng hiện tại, vì các đơn khác của họ có thể hoàn thành trước. Migration tính lại dữ liệu cũ bằng hàm cửa sổ (xếp đơn theo thời điểm hoàn thành) và có test chạy chính các câu UPDATE đó. Ghi `orders.points_earned` để lịch sử đơn tự giải thích; `users.points` có `CHECK (points >= 0)`.
 - **Không đổi điểm lấy ưu đãi:** điểm chỉ tích lũy theo yêu cầu hiện tại (xem nợ kỹ thuật #17).
 
 ### F07 - Quản lý đơn hàng
@@ -546,6 +566,33 @@ Quyết định thiết kế F10:
 - **Tìm kiếm người dùng** thoát `%`, `_`, `\` trước khi đưa vào `contains` (hàm dùng chung `lib/like.js`, trước đó F04 và F07 mỗi nơi giữ một bản sao).
 - Mọi route nằm dưới `/api/admin` nên tự có kiểm tra quyền ADMIN; khách hàng nhận 403, chưa đăng nhập nhận 401 (có test cho từng route).
 
+### F08 - Đánh giá và yêu thích
+
+| Method | Đường dẫn                         | Quyền     | Mô tả                                                                                                                                      | User story |
+| ------ | --------------------------------- | --------- | ------------------------------------------------------------------------------------------------------------------------------------------ | ---------- |
+| GET    | /api/products/:slug/reviews       | Công khai | Đánh giá đang hiện của sản phẩm, mới nhất trước (`page`, `pageSize` tối đa 50, mặc định 5) kèm `summary` (`average`, `count`, `breakdown`) | US-21      |
+| GET    | /api/products/:slug/reviews/mine  | Đăng nhập | `{ canReview, review }`: có đơn COMPLETED chứa sản phẩm hay không, và đánh giá của mình (kể cả khi đang bị ẩn)                             | US-21      |
+| POST   | /api/products/:slug/reviews       | Đăng nhập | `{ rating, comment? }`: tạo đánh giá; 403 `REVIEW_NOT_ALLOWED` nếu chưa nhận hàng, 409 `REVIEW_EXISTS` nếu đã đánh giá                     | US-21      |
+| PATCH  | /api/products/:slug/reviews/mine  | Đăng nhập | `{ rating, comment? }`: sửa đánh giá của mình; 404 `REVIEW_NOT_FOUND` nếu chưa có                                                          | US-21      |
+| GET    | /api/wishlist                     | Đăng nhập | Thẻ sản phẩm yêu thích còn hiển thị, mới thêm trước (`items`, `total`)                                                                     | US-22      |
+| PUT    | /api/wishlist/:id                 | Đăng nhập | Thêm sản phẩm có id này (idempotent); 404 nếu không hiển thị, 400 `WISHLIST_FULL` khi đủ 100                                               | US-22      |
+| DELETE | /api/wishlist/:id                 | Đăng nhập | Bỏ sản phẩm có id này (idempotent, luôn 204)                                                                                               | US-22      |
+| GET    | /api/admin/reviews                | ADMIN     | Mọi đánh giá kể cả đã ẩn: `search` (sản phẩm, email, họ tên, bình luận), `status` (`visible`, `hidden`), `rating`, `page`, `pageSize`      | US-23      |
+| PATCH  | /api/admin/reviews/:id/visibility | ADMIN     | `{ isHidden: boolean }`: ẩn hoặc bỏ ẩn (idempotent); 404 `REVIEW_NOT_FOUND`                                                                | US-23      |
+
+`GET /api/products` và `GET /api/products/:slug` có thêm `rating`: `{ average, count }` ở danh sách và `{ average, count, breakdown }` ở chi tiết (`average` là `null` khi chưa có đánh giá).
+
+Quyết định thiết kế F08:
+
+- **Điều kiện đánh giá (BR-13) kiểm tra ở máy chủ:** có `order_items` của sản phẩm thuộc đơn `COMPLETED` của đúng người đó. Đơn của khách không đăng nhập (`user_id` rỗng) không tính, vì không biết ai là chủ. `GET .../mine` trả `canReview` để Client biết nên hiện form hay lời giải thích, nhưng quyền thật vẫn do `POST` kiểm tra lại.
+- **Một người một đánh giá bằng ràng buộc của CSDL:** `UNIQUE (product_id, user_id)`; hai request gửi cùng lúc chỉ một cái thành công, cái còn lại bắt lỗi `P2002` và trả 409 (có test chạy song song). Kiểm tra trước rồi mới tạo sẽ lọt trong khoảng hở giữa hai bước.
+- **Điểm tính một lần cho cả trang danh sách:** `lib/rating.js` dùng `groupBy` theo `productId` cho đúng các id của trang (một truy vấn, không phải N truy vấn); làm tròn 1 chữ số ở JavaScript. Đánh giá bị ẩn không vào điểm và không vào `total` của danh sách công khai.
+- **Hiển thị sản phẩm dùng chung một định nghĩa:** `lib/productVisibility.js` (sản phẩm đang bán, danh mục và thương hiệu đang hiện) được trang chi tiết, đánh giá và yêu thích cùng dùng, để ba nơi không lệch nhau. Sản phẩm không hiển thị thì mọi API đánh giá trả 404 như trang chi tiết.
+- **Tên người viết rút gọn** ("Quốc P.") và không bao giờ trả email hay mã người dùng ở API công khai; Admin xem được email để xử lý vi phạm.
+- **Sửa đánh giá không bỏ ẩn:** `isHidden` không nằm trong dữ liệu người viết gửi lên, nên người bị ẩn không thể tự bỏ ẩn bằng cách sửa. Người viết vẫn thấy đánh giá của mình (kèm cờ `isHidden`) để biết vì sao nó không hiện với người khác.
+- **Yêu thích idempotent:** thêm hai lần hoặc hai request cùng lúc đều ra cùng kết quả (bắt `P2002`), bỏ sản phẩm không có trong danh sách vẫn 204. Id sản phẩm nằm trên đường dẫn (`:id`) giống `DELETE /api/cart/items/:id`.
+- Chưa có xóa đánh giá của chính mình (xem TECH_DEBT.md).
+
 ### Quyết định bảo mật của F01
 
 - Access token JWT sống 15 phút; refresh token là chuỗi ngẫu nhiên 256 bit sống 7 ngày, DB chỉ lưu bản băm SHA-256.
@@ -577,6 +624,7 @@ Client và Admin dùng chung `shared` để không viết lặp logic đăng nh�
 | Admin    | `/dang-nhap`          | Công khai     | Đăng nhập quản trị                      | US-02, US-05 |
 | Admin    | `/` và các trang khác | Vai trò ADMIN | Tổng quan (dashboard thống kê từ F10)   | US-05, US-26 |
 | Admin    | `/nguoi-dung`         | Vai trò ADMIN | Quản lý người dùng (F10)                | US-27        |
+| Admin    | `/danh-gia`           | Vai trò ADMIN | Quản lý đánh giá (F08)                  | US-23        |
 
 ### Luồng làm mới phiên (US-03)
 
@@ -784,7 +832,7 @@ Thương hiệu nổi bật, banner đôi (chỉ hiện nếu danh mục tương
 | `OrderPage`                             | Hai chế độ cùng giao diện: thành viên (`GET /orders/:code`) hoặc khách có số điện thoại đã nhớ (`POST /orders/lookup`; hủy qua `/orders/lookup/cancel`). Chưa đăng nhập và chưa nhớ số điện thoại thì chuyển sang trang tra cứu kèm mã đơn. Khung thành công của khách nhắc ghi lại mã đơn + số điện thoại và mời đăng ký; của thành viên cho biết điểm sẽ nhận. Truy vấn có `staleTime` 30 giây để không gọi lại ngay sau khi trang tra cứu vừa nạp (tra cứu bị giới hạn tần suất). |
 | `OrderLookupPage` (`/tra-cuu-don-hang`) | Form mã đơn + số điện thoại (kiểm tra dạng trước khi gửi, mã gõ chữ thường vẫn được, điền sẵn từ `?code=`); đúng thì ghi đơn vào cache, nhớ số điện thoại và mở trang đơn; sai thì báo "không tìm thấy" như nhau. Có lối tắt ở chân trang và thanh tiện ích.                                                                                                                                                                                                                         |
 | `CartPage`                              | Nút luôn là "Tiến hành đặt hàng"; khách thấy lời mời tích điểm, thành viên thấy điểm của đơn.                                                                                                                                                                                                                                                                                                                                                                                        |
-| `ProfilePage`                           | Thẻ chào hiện điểm thành viên, tải lại từ `GET /users/me` vì điểm đổi khi Admin hoàn thành đơn.                                                                                                                                                                                                                                                                                                                                                                                      |
+| `ProfilePage`                           | Thẻ chào hiện điểm thành viên, tổng đã mua và còn thiếu bao nhiêu để được điểm tiếp theo; tải lại từ `GET /users/me` (hook `useMe`, dùng chung với giỏ hàng và trang đặt hàng) vì các số này đổi khi Admin hoàn thành đơn.                                                                                                                                                                                                                                                           |
 | Admin `OrdersPage`, `OrderDetailPage`   | Đơn khách ghi "Khách không đăng nhập" (chi tiết không còn đọc `customer.fullName` của đơn không có chủ); thành viên hiện điểm hiện có và điểm của đơn.                                                                                                                                                                                                                                                                                                                               |
 
 ## 18. Giao diện dashboard và quản lý người dùng F10 (Admin)
@@ -797,3 +845,18 @@ Thương hiệu nổi bật, banner đôi (chỉ hiện nếu danh mục tương
 | `AdminLayout`               | Thêm mục "Người dùng" ở thanh bên.                                                                                                                                                                                                                                                                                                                            |
 
 Quyết định: thẻ số liệu xếp biểu tượng và nhãn ở hàng trên, con số ở hàng dưới chiếm cả bề ngang thẻ vì số tiền lớn ("467.920.000 ₫") bị ngắt dòng khi đặt cạnh biểu tượng ở màn hình 1280 px (phát hiện khi xem trên trình duyệt thật, test đơn vị không thấy được). Bộ chờ khi gõ tìm kiếm chỉ về trang 1 khi từ khóa thật sự đổi (sửa lỗi ở cả `ProductsPage`, `OrdersPage` và `UsersPage`: bấm "Trang sau" trong 300 ms đầu từng bị giật về trang 1).
+
+## 19. Giao diện đánh giá và yêu thích F08 (Client và Admin)
+
+| Thành phần                           | Vai trò                                                                                                                                                                                                                                                                                                                                  |
+| ------------------------------------ | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `StarRating` (Client)                | Hiển thị điểm sao có thể lẻ (4,3 sao) bằng hai lớp sao, lớp vàng cắt theo tỉ lệ; là một ảnh có nhãn "4,3 trên 5 sao"; số thập phân kiểu Việt Nam.                                                                                                                                                                                        |
+| `ReviewsSection` (`/san-pham/:slug`) | Điểm trung bình, phân bố theo sao, danh sách phân trang 5 đánh giá, và khu vực viết đánh giá theo người xem: khách chưa đăng nhập thấy lời mời đăng nhập, người chưa nhận hàng thấy điều kiện (BR-13), người đã nhận hàng thấy form, người đã đánh giá thấy đánh giá của mình và nút Sửa. Đánh giá của mình đang bị ẩn có ghi chú riêng. |
+| `ReviewForm`                         | Số sao là nhóm nút radio (dùng được phím mũi tên và trình đọc màn hình), bình luận có bộ đếm "Còn n ký tự" và `maxLength` 500; thiếu số sao thì báo ngay ở form, lỗi từ máy chủ hiện trong form và giữ nguyên nội dung đã nhập.                                                                                                          |
+| `WishlistButton`, `useWishlist`      | Nút trái tim trên thẻ sản phẩm (dưới nút so sánh) và nút chữ ở trang chi tiết; `aria-pressed` cho biết trạng thái. Mọi thẻ dùng chung một truy vấn danh sách (khóa cache gắn id người dùng). Khách chưa đăng nhập bấm thì được chuyển tới trang đăng nhập; lỗi từ máy chủ (đủ 100 sản phẩm) hiện cạnh nút trong 5 giây.                  |
+| `WishlistPage` (`/yeu-thich`)        | Cần đăng nhập; dùng lại thẻ sản phẩm nên thêm vào giỏ, so sánh và bỏ yêu thích ngay tại đây. Có trạng thái đang tải, lỗi kèm Thử lại và chưa lưu sản phẩm nào.                                                                                                                                                                           |
+| `ProductCard`, `ProductDetailPage`   | Thẻ hiện điểm sao và số đánh giá khi đã có đánh giá; trang chi tiết hiện điểm dưới tên (liên kết cuộn tới khối đánh giá) hoặc "Chưa có đánh giá".                                                                                                                                                                                        |
+| `AccountMenu` (Client)               | Thêm mục "Sản phẩm yêu thích".                                                                                                                                                                                                                                                                                                           |
+| `ReviewsPage` (Admin, `/danh-gia`)   | Bảng đánh giá: tìm theo sản phẩm, người viết hoặc nội dung (chờ 300 ms), lọc trạng thái và số sao, phân trang; nút Ẩn hoặc Bỏ ẩn làm ngay (không hỏi lại vì hoàn tác được bằng một cú nhấp). Hàng đã ẩn nền xám. Mục "Đánh giá" ở thanh bên.                                                                                             |
+
+Quyết định: ẩn đánh giá không hỏi xác nhận (khác khóa tài khoản ở F10) vì hoàn tác ngay được và không có hậu quả ra ngoài; nút trái tim và nút so sánh xếp dọc ở góc ảnh thẻ để không đè nhãn giảm giá bên trái.

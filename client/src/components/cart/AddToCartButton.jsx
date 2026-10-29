@@ -49,7 +49,9 @@ export default function AddToCartButton({
   if (variant === 'icon') {
     const label = outOfStock ? `${product.name} đã hết hàng` : `Thêm ${product.name} vào giỏ`;
     return (
-      <div className={`relative ${className}`}>
+      // className do nơi dùng đặt vị trí (absolute trên thẻ sản phẩm). Không thêm `relative` ở đây: hai lớp vị trí cùng lúc
+      // thì `relative` thắng và nút bị đẩy lệch ra khỏi góc thẻ
+      <div className={className}>
         <button
           type="button"
           aria-label={label}

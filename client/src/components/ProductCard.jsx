@@ -4,12 +4,15 @@
  * Khi rê chuột: thẻ nổi lên, ảnh phóng nhẹ, hiện "Xem chi tiết".
  * Ảnh dùng object-contain trên nền trắng: ảnh thật tải lên từ Admin (thường nền trắng, nhiều tỉ lệ khác nhau) không bị cắt xén; ảnh minh họa SVG của seed là hình vuông nên vẫn lấp đầy ô.
  * [F12] Nút "So sánh" nằm cạnh liên kết (không lồng trong liên kết vì không được đặt nút bên trong thẻ <a>).
+ * [F08] Nút "Yêu thích" nằm ngay dưới nút so sánh; sản phẩm đã có đánh giá thì hiện điểm sao dưới tên.
  */
 import { Link } from 'react-router-dom';
 import { IconArrowRight, discountPercent } from '@techstore/shared';
 import { assetUrl } from '../lib/api.js';
 import AddToCartButton from './cart/AddToCartButton.jsx'; // [F05]
 import CompareButton from './compare/CompareButton.jsx';
+import StarRating, { formatRating } from './reviews/StarRating.jsx'; // [F08]
+import WishlistButton from './wishlist/WishlistButton.jsx'; // [F08]
 import Price from './Price.jsx';
 
 export default function ProductCard({ product }) {
@@ -54,6 +57,12 @@ export default function ProductCard({ product }) {
           <h3 className="line-clamp-2 min-h-10 text-sm font-semibold leading-5 text-slate-900 transition group-hover:text-brand-700">
             {product.name}
           </h3>
+          {product.rating?.count > 0 && (
+            <span className="flex items-center gap-1.5 text-xs text-slate-500">
+              <StarRating value={product.rating.average} size={13} />
+              {formatRating(product.rating.average)} ({product.rating.count})
+            </span>
+          )}
           <div className="mt-auto pr-12 pt-2">
             <Price price={product.price} salePrice={product.salePrice} showPercent={false} />
           </div>
@@ -63,6 +72,7 @@ export default function ProductCard({ product }) {
         </div>
       </Link>
       <CompareButton product={product} className="absolute right-3 top-3 z-10" />
+      <WishlistButton product={product} className="absolute right-3 top-14 z-10" />
       {/* [F05] Thêm nhanh 1 sản phẩm vào giỏ */}
       <AddToCartButton
         product={product}

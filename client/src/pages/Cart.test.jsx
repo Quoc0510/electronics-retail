@@ -12,6 +12,7 @@ import {
   apiError,
   customer,
   emptyCart,
+  emptyReviews,
   mockServer,
   renderApp,
   session,
@@ -115,6 +116,8 @@ const productPageHandlers = (extra = {}) => ({
   ...storefrontApi,
   'GET /users/me': [200, customer],
   'GET /products/iphone-15': [200, detail()],
+  'GET /products/iphone-15/reviews': [200, emptyReviews],
+  'GET /products/iphone-15/reviews/mine': [200, { canReview: false, review: null }],
   ...extra,
 });
 

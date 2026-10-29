@@ -2,12 +2,20 @@
  * @feature [F01][F04][F13] Trang tài khoản gồm 3 mục: thông tin cá nhân, đổi mật khẩu, sổ địa chỉ (US-04).
  * Đầu trang có thẻ chào với ảnh đại diện chữ cái đầu; các mục chuyển bằng dải nút dạng viên thuốc.
  * Trang này nằm trong ProtectedRoute nên chắc chắn đã đăng nhập.
- * [F13] Thẻ chào hiện điểm thành viên (BR-15); điểm đổi khi Admin hoàn thành đơn nên luôn tải lại từ máy chủ.
+ * [F13] Thẻ chào hiện điểm thành viên và tổng đã mua (BR-15: 1.000.000 ₫ tiền hàng được 1 điểm); các số này đổi khi Admin
+ * hoàn thành đơn nên luôn tải lại từ máy chủ.
  */
 import { useState } from 'react';
-import { useQuery } from '@tanstack/react-query';
-import { IconLayers, IconShield, IconStar, IconUser } from '@techstore/shared';
-import { api } from '../lib/api.js';
+import {
+  IconLayers,
+  IconShield,
+  IconStar,
+  IconUser,
+  POINT_UNIT_VND,
+  amountToNextPoint,
+  formatVnd,
+} from '@techstore/shared';
+import { useMe } from '../hooks/useMe.js';
 import AddressBook from '../components/profile/AddressBook.jsx';
 import PasswordForm from '../components/profile/PasswordForm.jsx';
 import ProfileForm from '../components/profile/ProfileForm.jsx';
@@ -22,12 +30,7 @@ const TABS = [
 export default function ProfilePage() {
   const { user } = useAuth();
   // Điểm có thể đã đổi sau khi đăng nhập (đơn được hoàn thành) nên không dùng bản user lưu lúc đăng nhập
-  const { data: me } = useQuery({
-    queryKey: ['me'],
-    queryFn: () => api.get('/users/me').then((res) => res.data),
-    placeholderData: user,
-  });
-  const points = me?.points ?? 0;
+  const { points, totalSpent } = useMe();
   const [activeId, setActiveId] = useState('info');
   const { Panel } = TABS.find((tab) => tab.id === activeId);
 
@@ -43,6 +46,10 @@ export default function ProfilePage() {
             <h1 className="truncate text-2xl font-bold sm:text-3xl">Tài khoản của tôi</h1>
             <p className="truncate text-sm text-white/80">
               {user.fullName} · {user.email}
+            </p>
+            <p className="text-xs text-white/80">
+              Đã mua {formatVnd(totalSpent)} · mua thêm {formatVnd(amountToNextPoint(totalSpent))}{' '}
+              để được thêm 1 điểm (mỗi {formatVnd(POINT_UNIT_VND)} tiền hàng được 1 điểm)
             </p>
           </div>
           <p

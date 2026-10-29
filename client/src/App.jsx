@@ -1,5 +1,5 @@
 /**
- * @feature [F00][F01][F04][F05][F06][F12][F13] Nền tảng, Xác thực, Duyệt sản phẩm, Giỏ hàng, Đặt hàng, So sánh, Đặt hàng không cần đăng nhập - Khai báo các trang của Client.
+ * @feature [F00][F01][F04][F05][F06][F08][F12][F13] Nền tảng, Xác thực, Duyệt sản phẩm, Giỏ hàng, Đặt hàng, Yêu thích, So sánh, Đặt hàng không cần đăng nhập - Khai báo các trang của Client.
  * Mỗi tính năng mới sẽ thêm <Route> tương ứng ở đây (F04 danh sách sản phẩm, F05 giỏ hàng...).
  */
 import { Routes, Route } from 'react-router-dom';
@@ -23,6 +23,7 @@ import ProductDetailPage from './pages/ProductDetailPage.jsx'; // [F04]
 import ProductListPage from './pages/ProductListPage.jsx'; // [F04]
 import ProfilePage from './pages/ProfilePage.jsx';
 import RegisterPage from './pages/RegisterPage.jsx';
+import WishlistPage from './pages/WishlistPage.jsx'; // [F08]
 
 export default function App() {
   return (
@@ -52,6 +53,7 @@ export default function App() {
           <Route element={<ProtectedRoute />}>
             <Route path="/tai-khoan" element={<ProfilePage />} />
             <Route path="/don-hang" element={<OrderListPage />} /> {/* [F07] */}
+            <Route path="/yeu-thich" element={<WishlistPage />} /> {/* [F08] */}
           </Route>
           <Route path="*" element={<NotFoundPage />} />
         </Route>

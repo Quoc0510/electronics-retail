@@ -13,15 +13,16 @@ Phục vụ rubric TC2.1. Nguồn sự thật là [schema.prisma](../backend/pri
 
 ## users - Người dùng (F01)
 
-| Cột           | Kiểu    | Ràng buộc          | Mô tả                                          |
-| ------------- | ------- | ------------------ | ---------------------------------------------- |
-| email         | text    | duy nhất, bắt buộc | Email đăng nhập                                |
-| password_hash | text    | bắt buộc           | Mật khẩu đã băm bcrypt, không lưu mật khẩu gốc |
-| full_name     | text    | bắt buộc           | Họ tên                                         |
-| phone         | text    | tùy chọn           | Số điện thoại                                  |
-| role          | role    | mặc định CUSTOMER  | Vai trò                                        |
-| is_active     | boolean | mặc định true      | false = tài khoản bị khóa                      |
-| points        | int     | >= 0, mặc định 0   | Điểm thành viên (BR-15, F13)                   |
+| Cột           | Kiểu    | Ràng buộc          | Mô tả                                                                      |
+| ------------- | ------- | ------------------ | -------------------------------------------------------------------------- |
+| email         | text    | duy nhất, bắt buộc | Email đăng nhập                                                            |
+| password_hash | text    | bắt buộc           | Mật khẩu đã băm bcrypt, không lưu mật khẩu gốc                             |
+| full_name     | text    | bắt buộc           | Họ tên                                                                     |
+| phone         | text    | tùy chọn           | Số điện thoại                                                              |
+| role          | role    | mặc định CUSTOMER  | Vai trò                                                                    |
+| is_active     | boolean | mặc định true      | false = tài khoản bị khóa                                                  |
+| points        | int     | >= 0, mặc định 0   | Điểm thành viên = floor(total_spent / 1.000.000) (BR-15, F13)              |
+| total_spent   | int     | >= 0, mặc định 0   | Tổng tiền hàng của mọi đơn COMPLETED, dùng tính điểm cộng dồn (BR-15, F13) |
 
 ## refresh_tokens - Phiên đăng nhập (F01)
 

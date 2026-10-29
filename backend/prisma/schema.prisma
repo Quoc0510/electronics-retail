@@ -1,7 +1,7 @@
-// @feature [F00-F07] Lược đồ cơ sở dữ liệu PostgreSQL (Prisma ORM).
+// @feature [F00-F08] Lược đồ cơ sở dữ liệu PostgreSQL (Prisma ORM).
 // Quy ước (docs/CODING_CONVENTION.md): model PascalCase số ít, bảng/cột snake_case qua @map/@@map.
 // Tiền tệ lưu bằng Int (đơn vị VND) - quy tắc BR-01.
-// Các model Review, Wishlist (F08) và Coupon (F09) sẽ được thêm bằng migration khi làm các tính năng đó.
+// Model Coupon (F09) sẽ được thêm bằng migration khi làm tính năng đó.
 
 generator client {
   provider = "prisma-client-js"
@@ -61,8 +61,10 @@ model User {
   role         Role     @default(CUSTOMER)
   // false = tài khoản bị khóa (US-27)
   isActive     Boolean  @default(true) @map("is_active")
-  // [F13] BR-15: điểm thành viên, cộng khi đơn của thành viên hoàn thành (CHECK >= 0 trong migration)
+  // [F13] BR-15: điểm thành viên = floor(totalSpent / 1.000.000), cộng khi đơn của thành viên hoàn thành (CHECK >= 0 trong migration)
   points       Int      @default(0)
+  // [F13] BR-15: tổng tiền hàng (không tính phí vận chuyển) của mọi đơn COMPLETED của thành viên, dùng tính điểm cộng dồn (CHECK >= 0)
+  totalSpent   Int      @default(0) @map("total_spent")
   createdAt    DateTime @default(now()) @map("created_at")
   updatedAt    DateTime @updatedAt @map("updated_at")
 
@@ -71,6 +73,8 @@ model User {
   cart          Cart?
   orders        Order[]
   statusChanges OrderStatusHistory[]
+  reviews       Review[]
+  wishlistItems WishlistItem[]
 
   @@map("users")
 }
@@ -171,8 +175,10 @@ model Product {
   category   Category       @relation(fields: [categoryId], references: [id])
   brand      Brand          @relation(fields: [brandId], references: [id])
   images     ProductImage[]
-  cartItems  CartItem[]
-  orderItems OrderItem[]
+  cartItems     CartItem[]
+  orderItems    OrderItem[]
+  reviews       Review[]
+  wishlistItems WishlistItem[]
 
   @@index([categoryId])
   @@index([brandId])
@@ -295,4 +301,45 @@ model OrderStatusHistory {
 
   @@index([orderId])
   @@map("order_status_history")
+}
+
+// ---------------------------------------------------------------------------
+// [F08] Đánh giá và yêu thích
+// ---------------------------------------------------------------------------
+
+// BR-13: chỉ người có đơn COMPLETED chứa sản phẩm mới được đánh giá; BR-19: mỗi người một đánh giá cho mỗi sản phẩm
+model Review {
+  id        Int      @id @default(autoincrement())
+  productId Int      @map("product_id")
+  userId    Int      @map("user_id")
+  // 1-5 sao (CHECK trong migration)
+  rating    Int
+  // Bình luận không bắt buộc, tối đa 500 ký tự (CHECK trong migration); chuỗi rỗng = không bình luận
+  comment   String   @default("")
+  // US-23: quản trị viên ẩn đánh giá vi phạm; đánh giá ẩn không hiện ở Client và không tính điểm trung bình
+  isHidden  Boolean  @default(false) @map("is_hidden")
+  createdAt DateTime @default(now()) @map("created_at")
+  updatedAt DateTime @updatedAt @map("updated_at")
+
+  product Product @relation(fields: [productId], references: [id], onDelete: Cascade)
+  user    User    @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@unique([productId, userId])
+  @@index([productId, isHidden, createdAt])
+  @@index([userId])
+  @@map("reviews")
+}
+
+// BR-20: danh sách yêu thích của thành viên, mỗi sản phẩm một lần, tối đa 100 sản phẩm
+model WishlistItem {
+  id        Int      @id @default(autoincrement())
+  userId    Int      @map("user_id")
+  productId Int      @map("product_id")
+  createdAt DateTime @default(now()) @map("created_at")
+
+  user    User    @relation(fields: [userId], references: [id], onDelete: Cascade)
+  product Product @relation(fields: [productId], references: [id], onDelete: Cascade)
+
+  @@unique([userId, productId])
+  @@map("wishlist_items")
 }
