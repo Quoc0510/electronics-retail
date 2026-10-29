@@ -20,12 +20,14 @@ import {
   IconCash,
   IconCheckCircle,
   IconTruck,
+  amountToNextPoint,
   calculatePoints,
   formatVnd,
   getErrorMessage,
   useFormState,
 } from '@techstore/shared';
 import { api, assetUrl } from '../lib/api.js';
+import { useMe } from '../hooks/useMe.js'; // [F13]
 import { clearGuestItems } from '../lib/guestCart.js'; // [F13]
 import { newRequestId, rememberGuestOrder } from '../lib/guestOrder.js'; // [F13]
 import { EMPTY_ADDRESS, toShippingPayload, validateAddress } from '../lib/addressValidation.js';
@@ -108,7 +110,9 @@ export default function CheckoutPage() {
 
   const fee = shippingFee(cart.subtotal);
   const total = cart.subtotal + fee;
-  const points = calculatePoints(cart.subtotal); // BR-15: điểm đơn này được khi hoàn thành (chỉ thành viên)
+  // BR-15: điểm đơn này được khi hoàn thành (chỉ thành viên), tính theo tổng đã mua; khách coi như bắt đầu từ 0
+  const { totalSpent } = useMe();
+  const points = calculatePoints(user ? totalSpent : 0, cart.subtotal);
 
   const submit = async (values) => {
     setProblems([]);
@@ -348,10 +352,12 @@ export default function CheckoutPage() {
           )}
 
           {/* [F13] BR-15: thành viên được tích điểm, khách không đăng nhập thì được mời đăng nhập */}
-          {points > 0 &&
+          {(points > 0 || user) &&
             (user ? (
               <p className="rounded-xl bg-emerald-50 p-3 text-sm font-medium text-emerald-800">
-                Bạn sẽ nhận {points} điểm thành viên khi đơn hoàn thành.
+                {points > 0
+                  ? `Bạn sẽ nhận ${points} điểm thành viên khi đơn hoàn thành.`
+                  : `Mua thêm ${formatVnd(amountToNextPoint(totalSpent + cart.subtotal))} nữa (tính cả đơn này) để được thêm 1 điểm thành viên.`}
               </p>
             ) : (
               <p className="rounded-xl bg-slate-100 p-3 text-sm text-slate-700">

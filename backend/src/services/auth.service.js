@@ -24,6 +24,7 @@ export const toPublicUser = (user) => ({
   phone: user.phone,
   role: user.role,
   points: user.points, // [F13] điểm thành viên (BR-15)
+  totalSpent: user.totalSpent, // [F13] tổng tiền hàng đã mua, để hiện còn bao nhiêu nữa thì được điểm kế tiếp
   createdAt: user.createdAt,
 });
 

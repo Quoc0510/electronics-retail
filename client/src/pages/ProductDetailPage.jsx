@@ -3,6 +3,7 @@
  * Bố cục: bộ ảnh phóng to được, khối giá nổi bật kèm cam kết, mô tả và bảng thông số, sản phẩm liên quan,
  * thanh giá dính khi cuộn. Sản phẩm không tồn tại, đã ẩn hoặc thuộc danh mục/thương hiệu bị ẩn đều hiện trang
  * "không tìm thấy" (AC3). Nút "Thêm vào giỏ" sẽ được đặt cạnh khối giá khi làm F05.
+ * [F08] Điểm đánh giá dưới tên sản phẩm (bấm để cuộn tới khối đánh giá), nút "Yêu thích" và khối đánh giá ở cuối trang.
  */
 import { useEffect, useRef, useState } from 'react';
 import { Link, useParams } from 'react-router-dom';
@@ -24,6 +25,9 @@ import ProductGallery from '../components/detail/ProductGallery.jsx';
 import AddToCartButton from '../components/cart/AddToCartButton.jsx'; // [F05]
 import QuantityStepper from '../components/cart/QuantityStepper.jsx'; // [F05]
 import CompareButton from '../components/compare/CompareButton.jsx'; // [F12]
+import ReviewsSection from '../components/reviews/ReviewsSection.jsx'; // [F08]
+import StarRating, { formatRating } from '../components/reviews/StarRating.jsx'; // [F08]
+import WishlistButton from '../components/wishlist/WishlistButton.jsx'; // [F08]
 import StickyPriceBar from '../components/detail/StickyPriceBar.jsx';
 import { pushRecent } from '../lib/recentlyViewed.js'; // [F12]
 import Price from '../components/Price.jsx';
@@ -205,6 +209,18 @@ export default function ProductDetailPage() {
               {product.name}
             </h1>
             <div className="flex flex-wrap items-center gap-3 text-sm">
+              {product.rating?.count > 0 ? (
+                <a
+                  href="#danh-gia"
+                  className="inline-flex items-center gap-1.5 text-slate-600 hover:text-brand-600"
+                >
+                  <StarRating value={product.rating.average} />
+                  <span className="font-semibold">{formatRating(product.rating.average)}</span>
+                  <span>({product.rating.count} đánh giá)</span>
+                </a>
+              ) : (
+                <span className="text-slate-500">Chưa có đánh giá</span>
+              )}
               <span className="text-slate-500">Mã sản phẩm: {product.sku}</span>
               <span
                 className={`inline-flex items-center gap-1.5 rounded-full px-3 py-1 text-xs font-semibold ${
@@ -242,7 +258,10 @@ export default function ProductDetailPage() {
               )}
               <AddToCartButton product={product} quantity={quantity} className="min-w-52 flex-1" />
             </div>
-            <CompareButton product={product} variant="pill" />
+            <div className="flex flex-wrap gap-3">
+              <CompareButton product={product} variant="pill" />
+              <WishlistButton product={product} variant="pill" />
+            </div>
             <ul className="space-y-2 border-t border-brand-100 pt-4 text-sm text-slate-700">
               {PERKS.map(({ Icon, text }) => (
                 <li key={text} className="flex items-center gap-2.5">
@@ -290,6 +309,8 @@ export default function ProductDetailPage() {
           )}
         </div>
       </div>
+
+      <ReviewsSection key={product.id} product={product} />
 
       <RelatedProducts product={product} />
 

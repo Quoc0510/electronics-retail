@@ -25,4 +25,4 @@ export {
   useTheme,
 } from './theme.js'; // [F12]
 export * from './orderStatus.js'; // [F06][F07] nhãn, màu, luồng trạng thái đơn hàng
-export { POINT_UNIT_VND, calculatePoints } from './points.js'; // [F13] quy tắc điểm thành viên
+export { POINT_UNIT_VND, amountToNextPoint, calculatePoints, pointsForSpent } from './points.js'; // [F13] quy tắc điểm thành viên

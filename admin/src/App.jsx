@@ -14,6 +14,7 @@ import OrderDetailPage from './pages/OrderDetailPage.jsx'; // [F07]
 import OrdersPage from './pages/OrdersPage.jsx'; // [F07]
 import ProductFormPage from './pages/ProductFormPage.jsx'; // [F03]
 import ProductsPage from './pages/ProductsPage.jsx'; // [F03]
+import ReviewsPage from './pages/ReviewsPage.jsx'; // [F08]
 import UsersPage from './pages/UsersPage.jsx'; // [F10]
 
 export default function App() {
@@ -37,6 +38,8 @@ export default function App() {
           <Route path="/don-hang/:code" element={<OrderDetailPage />} />
           {/* [F10] Quản lý người dùng */}
           <Route path="/nguoi-dung" element={<UsersPage />} />
+          {/* [F08] Quản lý đánh giá */}
+          <Route path="/danh-gia" element={<ReviewsPage />} />
           <Route path="*" element={<NotFoundPage />} />
         </Route>
       </Route>

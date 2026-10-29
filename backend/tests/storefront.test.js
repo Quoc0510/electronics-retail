@@ -99,6 +99,7 @@ describe('GET /api/products - danh sách', () => {
       thumbnail: null,
       category: { name: 'Điện thoại', slug: 'dien-thoai' },
       brand: { name: 'Apple', slug: 'apple' },
+      rating: { average: null, count: 0 }, // [F08] chưa có đánh giá nào
     });
   });
 

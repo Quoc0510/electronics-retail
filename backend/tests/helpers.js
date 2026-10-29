@@ -43,3 +43,39 @@ export const createProduct = ({ categoryId, brandId, sku = 'SKU-1', isActive = t
       brandId,
     },
   });
+
+/** [F08] Tạo nhanh một danh mục và một thương hiệu đang hiện. */
+export const createCatalog = async () => ({
+  category: await prisma.category.create({ data: { name: 'Điện thoại', slug: 'dien-thoai' } }),
+  brand: await prisma.brand.create({ data: { name: 'Hãng A', slug: 'hang-a' } }),
+});
+
+let orderSeq = 0;
+/** [F08] Tạo thẳng một đơn của người dùng chứa một sản phẩm (mặc định đã hoàn thành) để chuẩn bị điều kiện được đánh giá. */
+export const createOrderWith = ({ userId, product, status = 'COMPLETED' }) => {
+  orderSeq += 1;
+  return prisma.order.create({
+    data: {
+      code: `TS261029-T${String(orderSeq).padStart(3, '0')}`,
+      userId,
+      status,
+      subtotal: product.price,
+      shippingFee: 0,
+      total: product.price,
+      recipientName: 'Người nhận',
+      phone: '0900000000',
+      shippingAddress: '1 Đường A, Quận B',
+      items: {
+        create: [
+          {
+            productId: product.id,
+            productName: product.name,
+            productSku: product.sku,
+            unitPrice: product.price,
+            quantity: 1,
+          },
+        ],
+      },
+    },
+  });
+};

@@ -9,6 +9,7 @@ import { adminCatalogRouter } from './catalog.routes.js'; // [F02]
 import productRoutes from './product.routes.js'; // [F03]
 import adminOrderRoutes from './adminOrder.routes.js'; // [F07]
 import { adminUserRouter, statsRouter } from './adminUser.routes.js'; // [F10]
+import adminReviewRoutes from './adminReview.routes.js'; // [F08]
 
 const router = Router();
 
@@ -31,5 +32,8 @@ router.use('/orders', adminOrderRoutes);
 // [F10] Thống kê dashboard và quản lý người dùng: /api/admin/stats, /api/admin/users
 router.use('/stats', statsRouter);
 router.use('/users', adminUserRouter);
+
+// [F08] Quản lý đánh giá (ẩn/bỏ ẩn): /api/admin/reviews
+router.use('/reviews', adminReviewRoutes);
 
 export default router;

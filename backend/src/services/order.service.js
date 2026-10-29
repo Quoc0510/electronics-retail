@@ -27,6 +27,8 @@ import { isVisible, mergeDuplicates } from './cart.service.js';
 const MAX_CODE_ATTEMPTS = 5;
 
 const orderInclude = {
+  // [F13] Tổng đã mua của chủ đơn, để tính số điểm đơn đang xử lý sẽ được (BR-15); null với đơn khách vãng lai
+  user: { select: { totalSpent: true } },
   items: {
     orderBy: { id: 'asc' },
     include: {
@@ -45,10 +47,11 @@ const orderInclude = {
   history: { orderBy: { id: 'asc' } },
 };
 
-// Điểm thành viên sẽ nhận khi đơn hoàn thành (BR-15); đơn đã hoàn thành/hủy hoặc của khách vãng lai thì không còn "sẽ nhận"
+// Điểm thành viên sẽ nhận khi đơn hoàn thành (BR-15), tính trên tổng đã mua hiện tại của chủ đơn; chỉ là ước tính vì các
+// đơn khác của họ có thể hoàn thành trước. Đơn đã hoàn thành/hủy hoặc của khách vãng lai thì không còn "sẽ nhận"
 const expectedPoints = (order) =>
-  order.userId !== null && ['PENDING', 'CONFIRMED', 'SHIPPING'].includes(order.status)
-    ? calculatePoints(order.subtotal)
+  order.user && ['PENDING', 'CONFIRMED', 'SHIPPING'].includes(order.status)
+    ? calculatePoints(order.user.totalSpent, order.subtotal)
     : 0;
 
 // Dạng trả cho client: có thành tiền từng dòng, liên kết và ảnh sản phẩm (nếu sản phẩm còn)
@@ -480,11 +483,18 @@ const changeStatus = async (
     }
   }
 
-  // BR-15: hoàn thành đơn của thành viên thì cộng điểm đúng một lần (dòng đơn đang bị khóa và luồng trạng thái chỉ cho
-  // đi tới COMPLETED một lần). Đơn khách vãng lai (user_id null) không có chủ để cộng điểm.
+  // BR-15: hoàn thành đơn của thành viên thì cộng tiền hàng vào tổng đã mua và cộng phần điểm tăng thêm, đúng một lần (dòng
+  // đơn đang bị khóa và luồng trạng thái chỉ cho đi tới COMPLETED một lần). Đơn khách vãng lai (user_id null) không có chủ.
+  // Cộng tổng bằng một câu UPDATE nguyên tử trên dòng người dùng nên hai đơn của cùng một người hoàn thành đồng thời sẽ
+  // xếp hàng chờ nhau: mỗi đơn thấy đúng tổng trước đó, không đơn nào làm mất phần lẻ của đơn kia.
   let pointsEarned = 0;
   if (toStatus === 'COMPLETED' && locked.userId !== null) {
-    pointsEarned = calculatePoints(locked.subtotal);
+    const { totalSpent } = await tx.user.update({
+      where: { id: locked.userId },
+      data: { totalSpent: { increment: locked.subtotal } },
+      select: { totalSpent: true },
+    });
+    pointsEarned = calculatePoints(totalSpent - locked.subtotal, locked.subtotal);
     if (pointsEarned > 0) {
       await tx.user.update({
         where: { id: locked.userId },
@@ -532,7 +542,9 @@ export const cancelMyOrder = async (userId, code, reason) => {
 
 const adminInclude = {
   ...orderInclude,
-  user: { select: { id: true, fullName: true, email: true, phone: true, points: true } },
+  user: {
+    select: { id: true, fullName: true, email: true, phone: true, points: true, totalSpent: true },
+  },
   history: {
     orderBy: { id: 'asc' },
     include: { changedBy: { select: { fullName: true, role: true } } },

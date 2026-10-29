@@ -50,7 +50,7 @@ const makeCart = (items) => ({
   canCheckout: items.length > 0 && items.every((i) => i.status === 'OK'),
 });
 
-const cart = makeCart([line(1)]); // 2 x 1.000.000 = 2.000.000 -> 200 điểm
+const cart = makeCart([line(1)]); // 2 x 1.000.000 = 2.000.000 -> 2 điểm
 
 const guestOrder = {
   id: 1,
@@ -92,7 +92,7 @@ const guestOrder = {
   ],
 };
 
-const memberOrder = { ...guestOrder, isGuest: false, pointsExpected: 200 };
+const memberOrder = { ...guestOrder, isGuest: false, pointsExpected: 2 };
 
 const seedGuestCart = () =>
   localStorage.setItem(GUEST_CART_KEY, JSON.stringify([{ productId: 101, quantity: 2 }]));
@@ -177,7 +177,7 @@ describe('Đặt hàng khi chưa đăng nhập (BR-11)', () => {
     await openCheckout();
 
     const aside = screen.getByRole('complementary', { name: 'Đơn hàng của bạn' });
-    expect(aside).toHaveTextContent('Đơn này sẽ được 200 điểm nếu bạn là thành viên');
+    expect(aside).toHaveTextContent('Đơn này sẽ được 2 điểm nếu bạn là thành viên');
     expect(within(aside).getByRole('link', { name: 'đăng nhập' })).toHaveAttribute(
       'href',
       '/dang-nhap',
@@ -306,7 +306,7 @@ describe('Đặt hàng khi chưa đăng nhập (BR-11)', () => {
     await screen.findByRole('heading', { name: 'Đặt hàng', level: 1 });
 
     expect(
-      screen.getByText('Bạn sẽ nhận 200 điểm thành viên khi đơn hoàn thành.'),
+      screen.getByText('Bạn sẽ nhận 2 điểm thành viên khi đơn hoàn thành.'),
     ).toBeInTheDocument();
     await fillShipping();
     await place();
@@ -316,7 +316,7 @@ describe('Đặt hàng khi chưa đăng nhập (BR-11)', () => {
     expect(posts(calls, 'POST /orders')[0].body).not.toHaveProperty('requestId');
     // Khung thành công của thành viên cho biết điểm sẽ nhận, không mời đăng ký
     const banner = screen.getByText('Đặt hàng thành công!').closest('[role="status"]');
-    expect(banner).toHaveTextContent('Bạn sẽ nhận 200 điểm thành viên');
+    expect(banner).toHaveTextContent('Bạn sẽ nhận 2 điểm thành viên');
     expect(within(banner).queryByText('Đăng ký thành viên')).not.toBeInTheDocument();
   });
 });
@@ -333,7 +333,7 @@ describe('Giỏ hàng: lời mời tích điểm (BR-15)', () => {
       '/dat-hang',
     );
     expect(summary).toHaveTextContent('đặt hàng ngay mà không cần tài khoản');
-    expect(summary).toHaveTextContent('Muốn tích 200 điểm thành viên cho đơn này?');
+    expect(summary).toHaveTextContent('Muốn tích 2 điểm thành viên cho đơn này?');
     expect(within(summary).getByRole('link', { name: 'đăng nhập' })).toBeInTheDocument();
   });
 
@@ -343,8 +343,71 @@ describe('Giỏ hàng: lời mời tích điểm (BR-15)', () => {
     renderApp('/gio-hang');
 
     const summary = await screen.findByRole('complementary', { name: 'Tóm tắt đơn hàng' });
-    expect(summary).toHaveTextContent('Đơn này được 200 điểm thành viên khi hoàn thành.');
+    expect(summary).toHaveTextContent('Đơn này được 2 điểm thành viên khi hoàn thành.');
     expect(within(summary).queryByRole('link', { name: 'đăng nhập' })).not.toBeInTheDocument();
+  });
+
+  // Điểm tính theo tổng đã mua (BR-15): phần lẻ của các đơn trước được cộng vào đơn này
+  const smallCart = makeCart([line(1, { quantity: 1, unitPrice: 600000, lineTotal: 600000 })]);
+
+  it('thành viên đã mua 600.000 ₫: đơn 600.000 ₫ nữa vượt mốc nên được 1 điểm', async () => {
+    signIn();
+    mockServer({
+      ...storefrontApi,
+      'GET /users/me': [200, { ...customer, totalSpent: 600000 }],
+      'GET /cart': [200, smallCart],
+    });
+    renderApp('/gio-hang');
+
+    const summary = await screen.findByRole('complementary', { name: 'Tóm tắt đơn hàng' });
+    await waitFor(() =>
+      expect(summary).toHaveTextContent('Đơn này được 1 điểm thành viên khi hoàn thành.'),
+    );
+  });
+
+  it('thành viên chưa đủ mốc: cho biết còn thiếu bao nhiêu (tính cả đơn này) để được điểm tiếp theo', async () => {
+    signIn();
+    mockServer({
+      ...storefrontApi,
+      'GET /users/me': [200, { ...customer, totalSpent: 0 }],
+      'GET /cart': [200, smallCart],
+    });
+    renderApp('/gio-hang');
+
+    const summary = await screen.findByRole('complementary', { name: 'Tóm tắt đơn hàng' });
+    expect(summary).toHaveTextContent(
+      'Mua thêm 400.000 ₫ nữa (tính cả đơn này) để được thêm 1 điểm',
+    );
+  });
+
+  it('khách không đăng nhập với đơn dưới 1.000.000 ₫: lời mời không nhắc số điểm', async () => {
+    seedGuestCart();
+    guestServer({ 'POST /cart/preview': [200, smallCart] });
+    renderApp('/gio-hang');
+
+    const summary = await screen.findByRole('complementary', { name: 'Tóm tắt đơn hàng' });
+    expect(summary).toHaveTextContent('Muốn tích điểm thành viên?');
+    expect(summary).not.toHaveTextContent('Muốn tích 0 điểm');
+  });
+});
+
+describe('Điểm cộng dồn ở trang đặt hàng (BR-15)', () => {
+  it('thành viên đã mua 54.980.000 ₫ đặt thêm 600.000 ₫ thì thấy điểm kế tiếp cách bao xa', async () => {
+    signIn();
+    const smallCart = makeCart([line(1, { quantity: 1, unitPrice: 600000, lineTotal: 600000 })]);
+    mockServer({
+      ...storefrontApi,
+      'GET /users/me': [200, { ...customer, totalSpent: 54980000 }],
+      'GET /cart': [200, smallCart],
+      'GET /users/me/addresses': [200, []],
+    });
+    renderApp('/dat-hang');
+    await screen.findByRole('heading', { name: 'Đặt hàng', level: 1 });
+
+    // 54.980.000 + 600.000 = 55.580.000: vượt mốc 55 triệu nên được 1 điểm
+    expect(
+      await screen.findByText('Bạn sẽ nhận 1 điểm thành viên khi đơn hoàn thành.'),
+    ).toBeInTheDocument();
   });
 });
 
@@ -428,7 +491,7 @@ describe('Trang đơn hàng của khách vãng lai', () => {
     renderApp(`/don-hang/${CODE}`);
 
     expect(
-      await screen.findByText('Dự kiến nhận 200 điểm thành viên khi đơn hoàn thành'),
+      await screen.findByText('Dự kiến nhận 2 điểm thành viên khi đơn hoàn thành'),
     ).toBeInTheDocument();
     expect(screen.queryByText(/không tích điểm/)).not.toBeInTheDocument();
     expect(screen.getByRole('link', { name: 'Tất cả đơn hàng của tôi' })).toBeInTheDocument();
@@ -445,14 +508,14 @@ describe('Trang đơn hàng của khách vãng lai', () => {
           ...memberOrder,
           status: 'COMPLETED',
           paymentStatus: 'PAID',
-          pointsEarned: 200,
+          pointsEarned: 2,
           pointsExpected: 0,
         },
       ],
     });
     renderApp(`/don-hang/${CODE}`);
 
-    expect(await screen.findByText('Đã cộng 200 điểm thành viên')).toBeInTheDocument();
+    expect(await screen.findByText('Đã cộng 2 điểm thành viên')).toBeInTheDocument();
     expect(screen.queryByText(/Dự kiến nhận/)).not.toBeInTheDocument();
   });
 });
@@ -580,5 +643,20 @@ describe('Điểm thành viên trong trang tài khoản (BR-15)', () => {
     const badge = await screen.findByLabelText('Điểm thành viên');
     await waitFor(() => expect(badge).toHaveTextContent(/1\.235/));
     expect(badge).toHaveTextContent('điểm thành viên');
+  });
+
+  it('hiện tổng đã mua, còn thiếu bao nhiêu để được điểm tiếp theo và quy tắc 1.000.000 ₫ = 1 điểm', async () => {
+    signIn();
+    mockServer({
+      ...storefrontApi,
+      'GET /users/me': [200, { ...customer, points: 54, totalSpent: 54980000 }],
+    });
+    renderApp('/tai-khoan');
+
+    const heading = await screen.findByRole('heading', { name: 'Tài khoản của tôi' });
+    const card = heading.closest('div').parentElement;
+    await waitFor(() => expect(card).toHaveTextContent('Đã mua 54.980.000 ₫'));
+    expect(card).toHaveTextContent('mua thêm 20.000 ₫ để được thêm 1 điểm');
+    expect(card).toHaveTextContent('mỗi 1.000.000 ₫ tiền hàng được 1 điểm');
   });
 });

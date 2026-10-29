@@ -15,6 +15,7 @@ import {
   IconLayers,
   IconLogOut,
   IconMenu,
+  IconStar,
   IconUsers,
   Logo,
   ThemeToggle,
@@ -27,6 +28,7 @@ const MENU_ITEMS = [
   { to: '/danh-muc', label: 'Danh mục', Icon: IconGrid }, // [F02]
   { to: '/thuong-hieu', label: 'Thương hiệu', Icon: IconLayers }, // [F02]
   { to: '/san-pham', label: 'Sản phẩm', Icon: IconBox }, // [F03]
+  { to: '/danh-gia', label: 'Đánh giá', Icon: IconStar }, // [F08]
   { to: '/nguoi-dung', label: 'Người dùng', Icon: IconUsers }, // [F10]
 ];
 

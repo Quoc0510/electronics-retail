@@ -17,12 +17,14 @@ import {
   IconBag,
   IconTrash,
   IconTruck,
+  amountToNextPoint,
   calculatePoints,
   formatVnd,
   getErrorMessage,
 } from '@techstore/shared';
 import { assetUrl } from '../lib/api.js';
 import { useCart } from '../hooks/useCart.js';
+import { useMe } from '../hooks/useMe.js'; // [F13]
 import { clearCartNotice, getCartNotice, subscribeCartNotice } from '../lib/cartNotice.js';
 import { FREE_SHIPPING_THRESHOLD, amountToFreeShipping, shippingFee } from '../lib/shipping.js';
 import QuantityStepper from '../components/cart/QuantityStepper.jsx';
@@ -150,7 +152,9 @@ function Summary({ cart, isLoggedIn }) {
   const missing = amountToFreeShipping(cart.subtotal);
   const progress = Math.min(100, Math.round((cart.subtotal / FREE_SHIPPING_THRESHOLD) * 100));
   const hasIssues = cart.items.length > 0 && !cart.canCheckout;
-  const points = calculatePoints(cart.subtotal); // BR-15
+  // BR-15: điểm tính theo tổng đã mua; khách không đăng nhập coi như bắt đầu từ 0
+  const { totalSpent } = useMe();
+  const points = calculatePoints(isLoggedIn ? totalSpent : 0, cart.subtotal);
 
   return (
     <aside
@@ -223,9 +227,11 @@ function Summary({ cart, isLoggedIn }) {
       )}
       <p className="text-center text-xs text-slate-500">Thanh toán khi nhận hàng (COD).</p>
       {/* [F13] BR-15: thành viên được tích điểm; khách không đăng nhập vẫn đặt được, chỉ không có điểm */}
-      {isLoggedIn && points > 0 && (
+      {isLoggedIn && cart.subtotal > 0 && (
         <p className="rounded-xl bg-emerald-50 p-3 text-center text-sm font-medium text-emerald-800">
-          Đơn này được {points} điểm thành viên khi hoàn thành.
+          {points > 0
+            ? `Đơn này được ${points} điểm thành viên khi hoàn thành.`
+            : `Mua thêm ${formatVnd(amountToNextPoint(totalSpent + cart.subtotal))} nữa (tính cả đơn này) để được thêm 1 điểm thành viên.`}
         </p>
       )}
       {!isLoggedIn && (
