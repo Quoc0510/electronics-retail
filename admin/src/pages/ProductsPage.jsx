@@ -1,5 +1,5 @@
 /**
- * @feature [F03] Sản phẩm - Trang danh sách sản phẩm: tìm theo tên/SKU, lọc, phân trang, ẩn/hiện, xóa (US-09).
+ * @feature [F03][F14] Sản phẩm - Trang danh sách sản phẩm (có lối vào nhập từ Excel): tìm theo tên/SKU, lọc, phân trang, ẩn/hiện, xóa (US-09).
  */
 import { useEffect, useState } from 'react';
 import { Link } from 'react-router-dom';
@@ -92,6 +92,12 @@ export default function ProductsPage() {
   return (
     <div className="space-y-4">
       <PageHeader title="Sản phẩm" description="Quản lý hàng hóa, giá, tồn kho và ảnh">
+        <Link
+          to="/san-pham/nhap-excel"
+          className="inline-flex items-center gap-2 rounded-xl border border-slate-300 bg-white px-4 py-2 text-sm font-semibold text-slate-700 transition hover:border-brand-300 hover:bg-brand-50 hover:text-brand-700"
+        >
+          Nhập từ Excel
+        </Link>
         <Link
           to="/san-pham/them"
           className="inline-flex items-center gap-2 rounded-xl bg-gradient-to-r from-brand-600 to-violet-600 px-4 py-2 text-sm font-semibold text-white shadow-sm transition hover:shadow-glow hover:brightness-110"

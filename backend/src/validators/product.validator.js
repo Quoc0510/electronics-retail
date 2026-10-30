@@ -21,6 +21,7 @@ const sku = z
   .max(50, 'SKU tối đa 50 ký tự')
   .regex(/^[A-Za-z0-9._-]+$/, 'SKU chỉ gồm chữ, số và các ký tự . _ -')
   .transform((value) => value.toUpperCase());
+export const skuSchema = sku; // [F14] nhập từ Excel dùng lại đúng quy tắc SKU của trang quản lý sản phẩm
 
 // US-08 AC5: thông số kỹ thuật là các cặp tên - giá trị, ví dụ { "Màn hình": "6.1 inch OLED" }
 const specs = z

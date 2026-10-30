@@ -30,6 +30,29 @@ const translateUploadError = (error) => {
   return new AppError(400, 'Không đọc được file tải lên', 'UPLOAD_ERROR');
 };
 
+// [F14] File Excel nhập sản phẩm: một file .xlsx tối đa 2MB, giữ trong bộ nhớ (không ghi ra đĩa); nội dung thật được kiểm tra ở service
+export const MAX_SPREADSHEET_SIZE = 2 * 1024 * 1024;
+const spreadsheetUpload = multer({
+  storage: multer.memoryStorage(),
+  limits: { fileSize: MAX_SPREADSHEET_SIZE, files: 1, fields: 0 },
+});
+
+/** Middleware: đọc file ở trường "file" vào req.file; thiếu file hoặc file quá lớn thì báo lỗi rõ ràng */
+export const uploadSpreadsheet = (req, res, next) => {
+  spreadsheetUpload.single('file')(req, res, (error) => {
+    if (error instanceof multer.MulterError) {
+      if (error.code === 'LIMIT_FILE_SIZE') {
+        return next(new AppError(413, 'File Excel tối đa 2MB', 'IMPORT_FILE_TOO_LARGE'));
+      }
+      return next(new AppError(400, 'Chỉ tải lên một file Excel ở trường "file"', 'UPLOAD_ERROR'));
+    }
+    if (error) return next(error);
+    if (!req.file)
+      return next(new AppError(400, 'Vui lòng chọn file Excel (.xlsx)', 'IMPORT_NO_FILE'));
+    return next();
+  });
+};
+
 /** Middleware: đọc các file ở trường "images" vào req.files */
 export const uploadImages = (req, res, next) => {
   upload.array('images', MAX_IMAGES_PER_PRODUCT)(req, res, (error) => {
