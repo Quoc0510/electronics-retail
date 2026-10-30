@@ -5,8 +5,8 @@ import * as couponService from '../services/coupon.service.js';
 import { asyncHandler } from '../utils/asyncHandler.js';
 
 export const preview = asyncHandler(async (req, res) => {
-  const { code, subtotal } = req.validated.body;
-  res.json(await couponService.previewCoupon(code, subtotal));
+  const { code, items } = req.validated.body;
+  res.json(await couponService.previewCoupon(code, items, req.user?.id ?? null));
 });
 
 export const list = asyncHandler(async (req, res) => {

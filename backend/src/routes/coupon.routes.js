@@ -5,6 +5,7 @@
 import { Router } from 'express';
 import rateLimit from 'express-rate-limit';
 import { env } from '../config/env.js';
+import { optionalAuthenticate } from '../middlewares/auth.js';
 import { validate } from '../middlewares/validate.js';
 import * as couponController from '../controllers/coupon.controller.js';
 import { previewCouponSchema } from '../validators/coupon.validator.js';
@@ -21,6 +22,13 @@ const previewLimiter = rateLimit({
   },
 });
 
-router.post('/preview', previewLimiter, validate(previewCouponSchema), couponController.preview);
+// Đăng nhập là tùy chọn: chỉ cần để biết điểm thành viên khi mã có điều kiện điểm tối thiểu
+router.post(
+  '/preview',
+  previewLimiter,
+  optionalAuthenticate,
+  validate(previewCouponSchema),
+  couponController.preview,
+);
 
 export default router;

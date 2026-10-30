@@ -120,14 +120,16 @@ Phục vụ rubric TC2.1. Nguồn sự thật là [schema.prisma](../backend/pri
 
 ## coupons - Mã giảm giá (F09)
 
-| Cột        | Kiểu        | Ràng buộc                    | Mô tả                                           |
-| ---------- | ----------- | ---------------------------- | ----------------------------------------------- |
-| code       | text        | duy nhất, in hoa, 3-30 ký tự | Mã khách nhập (BR-14)                           |
-| type       | coupon_type | bắt buộc                     | PERCENT (giảm theo %) hoặc FIXED (giảm số tiền) |
-| value      | int         | > 0; PERCENT thì <= 100      | Số phần trăm hoặc số tiền (VND)                 |
-| min_order  | int         | >= 0, mặc định 0             | Tiền hàng tối thiểu để dùng mã                  |
-| starts_at  | timestamp   | bắt buộc                     | Bắt đầu áp dụng (bao gồm mốc này)               |
-| ends_at    | timestamp   | > starts_at                  | Hết hạn (loại trừ mốc này)                      |
-| max_uses   | int         | >= 1                         | Số lượt dùng tối đa                             |
-| used_count | int         | 0 đến max_uses, mặc định 0   | Số lượt đã dùng (đơn hủy được trả lại lượt)     |
-| is_active  | bool        | mặc định true                | Bật/tắt mã (US-24 AC2)                          |
+| Cột                                  | Kiểu        | Ràng buộc                              | Mô tả                                                                                                                 |
+| ------------------------------------ | ----------- | -------------------------------------- | --------------------------------------------------------------------------------------------------------------------- |
+| code                                 | text        | duy nhất, in hoa, 3-30 ký tự           | Mã khách nhập (BR-14)                                                                                                 |
+| type                                 | coupon_type | bắt buộc                               | PERCENT (giảm theo %) hoặc FIXED (giảm số tiền)                                                                       |
+| value                                | int         | > 0; PERCENT thì <= 100                | Số phần trăm hoặc số tiền (VND)                                                                                       |
+| min_order                            | int         | >= 0, mặc định 0                       | Tiền hàng tối thiểu để dùng mã                                                                                        |
+| starts_at                            | timestamp   | bắt buộc                               | Bắt đầu áp dụng (bao gồm mốc này)                                                                                     |
+| ends_at                              | timestamp   | > starts_at                            | Hết hạn (loại trừ mốc này)                                                                                            |
+| max_uses                             | int         | >= 1                                   | Số lượt dùng tối đa                                                                                                   |
+| used_count                           | int         | 0 đến max_uses, mặc định 0             | Số lượt đã dùng (đơn hủy được trả lại lượt)                                                                           |
+| is_active                            | bool        | mặc định true                          | Bật/tắt mã (US-24 AC2)                                                                                                |
+| min_points                           | int         | >= 0, mặc định 0                       | Điểm thành viên tối thiểu để dùng mã (khách chưa đăng nhập tính là 0 điểm)                                            |
+| product_ids, category_ids, brand_ids | int[]       | mỗi danh sách tối đa 50, mặc định rỗng | Phạm vi áp dụng, là hợp của ba danh sách; cả ba rỗng = mọi sản phẩm. Không có khóa ngoại: id đã xóa chỉ không khớp ai |

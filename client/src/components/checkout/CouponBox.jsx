@@ -2,10 +2,19 @@
  * @feature [F09] Mã giảm giá - Ô nhập mã giảm giá ở trang đặt hàng (US-25).
  *  - Mã hợp lệ: hiện ngay số tiền giảm (AC1) và nút bỏ mã; mã lỗi: nói đúng lý do (hết hạn, hết lượt, chưa đủ đơn tối thiểu - AC2).
  *  - Mỗi đơn một mã (AC4): đang áp một mã thì muốn dùng mã khác phải bỏ mã cũ trước.
+ *  - Mã có điều kiện phụ: ghi rõ khi mã chỉ áp dụng cho một số sản phẩm trong giỏ; khách chưa đăng nhập gặp mã yêu cầu điểm
+ *    thành viên thì có đường dẫn đăng nhập (giỏ hàng được giữ nguyên).
  *  - Nằm trong form đặt hàng nên phím Enter trong ô nhập chỉ áp mã, không được gửi đơn.
  */
 import { useState } from 'react';
+import { Link } from 'react-router-dom';
 import { Alert, Button, IconTag, formatVnd, getErrorMessage } from '@techstore/shared';
+
+// Khách chưa đăng nhập bị từ chối vì mã cần điểm thành viên (details.points = null): mời đăng nhập thay vì chỉ báo lỗi
+const needsLogin = (error) => {
+  const body = error?.response?.data?.error;
+  return body?.code === 'COUPON_MIN_POINTS' && body.details?.points === null;
+};
 
 export default function CouponBox({ appliedCode, onApply, onRemove, quote, checking, error }) {
   const [input, setInput] = useState('');
@@ -23,8 +32,9 @@ export default function CouponBox({ appliedCode, onApply, onRemove, quote, check
       >
         <span className="flex min-w-0 items-center gap-2 font-medium text-emerald-800">
           <IconTag size={16} className="shrink-0" />
-          <span className="truncate">
+          <span>
             Đã áp dụng mã <strong>{quote.code}</strong>: giảm {formatVnd(quote.discount)}
+            {quote.scoped && ' (chỉ áp dụng cho một số sản phẩm trong giỏ)'}
           </span>
         </span>
         <button
@@ -64,6 +74,15 @@ export default function CouponBox({ appliedCode, onApply, onRemove, quote, check
       {appliedCode && error && (
         <div className="space-y-2">
           <Alert>{getErrorMessage(error)}</Alert>
+          {needsLogin(error) && (
+            <Link
+              to="/dang-nhap"
+              state={{ from: { pathname: '/dat-hang' } }}
+              className="text-sm font-semibold text-brand-600 hover:underline"
+            >
+              Đăng nhập để dùng mã này
+            </Link>
+          )}
           <button
             type="button"
             onClick={() => {

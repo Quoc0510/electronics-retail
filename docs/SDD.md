@@ -201,6 +201,10 @@ erDiagram
         timestamp ends_at
         int max_uses
         int used_count "không vượt max_uses"
+        int min_points "điểm thành viên tối thiểu, 0 = không yêu cầu"
+        int_array product_ids "phạm vi: sản phẩm"
+        int_array category_ids "phạm vi: danh mục"
+        int_array brand_ids "phạm vi: thương hiệu"
         bool is_active
     }
     reviews {
@@ -357,6 +361,7 @@ Pipeline CI (`.github/workflows/ci.yml`) gồm 6 chặng: lint và format; test 
 | 29/10/2026 | Đổi cách tính điểm thành viên (BR-15): cộng dồn theo tổng tiền hàng đã mua, 1.000.000 đ = 1 điểm; thêm `users.total_spent` (migration `20261029010000_points_cumulative` tính lại điểm của dữ liệu cũ); `GET /api/users/me` thêm `totalSpent`                                                                                      | Yêu cầu của nhóm: điểm theo tổng giá trị mọi đơn hàng, không theo từng đơn                                              |
 | 30/10/2026 | Mã giảm giá (F09): bảng `coupons`, `orders.discount`, `orders.coupon_id`, `orders.coupon_code` (migration `20261030000000_coupons`); `POST /api/coupons/preview`, `GET/POST/PATCH /api/admin/coupons`; `POST /api/orders` và `/api/orders/guest` nhận `couponCode`; phí vận chuyển và điểm thành viên tính trên tiền hàng sau giảm | Hoàn thành chức năng bổ sung F09 (US-24, US-25)                                                                         |
 | 30/10/2026 | Đóng gói Docker (`backend/Dockerfile`, `frontend.Dockerfile`, `docker-compose.staging.yml`), CI mở rộng lên 6 chặng, backend nhận `TRUST_PROXY`                                                                                                                                                                                    | Hoàn thiện phần triển khai và vận hành (TC2.6)                                                                          |
+| 31/10/2026 | Điều kiện phụ của mã giảm giá (F09): `coupons.min_points`, `product_ids`, `category_ids`, `brand_ids` (migration `20261031000000_coupon_conditions`); `POST /api/coupons/preview` nhận giỏ hàng `items` thay cho `subtotal` và cho phép đăng nhập tùy chọn; lỗi mới `COUPON_MIN_POINTS`, `COUPON_NOT_APPLICABLE`                   | Yêu cầu của nhóm: mã có điều kiện điểm thành viên và áp dụng cho sản phẩm, danh mục, thương hiệu                        |
 | 28/10/2026 | `addresses.district` cho phép rỗng; địa chỉ ghép bỏ phần trống                                                                                                                                                                                                                                                                     | Nhiều địa phương đã bỏ cấp quận/huyện nên không thể bắt khách nhập                                                      |
 
 ## 9. Danh sách API đã triển khai
@@ -621,14 +626,14 @@ Quyết định thiết kế F08:
 
 ### F09 - Mã giảm giá
 
-| Method | Đường dẫn              | Quyền     | Mô tả                                                                                                                                    | User story |
-| ------ | ---------------------- | --------- | ---------------------------------------------------------------------------------------------------------------------------------------- | ---------- |
-| POST   | /api/coupons/preview   | Công khai | `{ code, subtotal }`: xem trước số tiền giảm (`code`, `type`, `value`, `minOrder`, `discount`); giới hạn 30 lần / 15 phút / IP           | US-25      |
-| GET    | /api/admin/coupons     | ADMIN     | Danh sách mã kèm `state` (`RUNNING`, `UPCOMING`, `EXPIRED`, `EXHAUSTED`, `DISABLED`): `search` (theo mã), `status` (`on`, `off`), `page` | US-24      |
-| POST   | /api/admin/coupons     | ADMIN     | `{ code, type, value, minOrder?, startsAt, endsAt, maxUses, isActive? }`: tạo mã; 409 `COUPON_EXISTS` nếu trùng                          | US-24      |
-| PATCH  | /api/admin/coupons/:id | ADMIN     | Sửa từng phần (không nhận `code`); 409 `COUPON_MAX_USES_TOO_LOW` nếu `maxUses` nhỏ hơn số lượt đã dùng; 404 `COUPON_NOT_FOUND`           | US-24      |
+| Method | Đường dẫn              | Quyền     | Mô tả                                                                                                                                                                                                                                                                             | User story |
+| ------ | ---------------------- | --------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ---------- |
+| POST   | /api/coupons/preview   | Công khai | `{ code, items: [{ productId, quantity }] }`: xem trước số tiền giảm (`code`, `type`, `value`, `minOrder`, `minPoints`, `scoped`, `eligibleSubtotal`, `discount`); đăng nhập là tùy chọn (có header thì dùng để kiểm tra điểm, token sai trả 401); giới hạn 30 lần / 15 phút / IP | US-25      |
+| GET    | /api/admin/coupons     | ADMIN     | Danh sách mã kèm `state` (`RUNNING`, `UPCOMING`, `EXPIRED`, `EXHAUSTED`, `DISABLED`): `search` (theo mã), `status` (`on`, `off`), `page`                                                                                                                                          | US-24      |
+| POST   | /api/admin/coupons     | ADMIN     | `{ code, type, value, minOrder?, startsAt, endsAt, maxUses, isActive? }`: tạo mã; 409 `COUPON_EXISTS` nếu trùng                                                                                                                                                                   | US-24      |
+| PATCH  | /api/admin/coupons/:id | ADMIN     | Sửa từng phần (không nhận `code`); 409 `COUPON_MAX_USES_TOO_LOW` nếu `maxUses` nhỏ hơn số lượt đã dùng; 404 `COUPON_NOT_FOUND`                                                                                                                                                    | US-24      |
 
-Mã lỗi khi dùng mã (xem trước và đặt hàng): `COUPON_NOT_FOUND` (404), `COUPON_INACTIVE`, `COUPON_NOT_STARTED`, `COUPON_EXPIRED`, `COUPON_EXHAUSTED`, `COUPON_MIN_ORDER` (400, kèm `details.minOrder`). `POST /api/orders` và `POST /api/orders/guest` nhận thêm `couponCode` (không bắt buộc, chuỗi rỗng coi như không dùng); đơn trả thêm `discount` và `couponCode`.
+Mã lỗi khi dùng mã (xem trước và đặt hàng): `COUPON_NOT_FOUND` (404), `COUPON_INACTIVE`, `COUPON_NOT_STARTED`, `COUPON_EXPIRED`, `COUPON_EXHAUSTED`, `COUPON_MIN_ORDER` (400, kèm `details.minOrder` và `details.scoped`), `COUPON_MIN_POINTS` (400, kèm `details.minPoints` và `details.points`, `points = null` với khách chưa đăng nhập), `COUPON_NOT_APPLICABLE` (400, giỏ không có sản phẩm nào khớp phạm vi). `POST` và `PATCH /api/admin/coupons` nhận thêm `minPoints`, `productIds`, `categoryIds`, `brandIds` (mỗi danh sách tối đa 50 id, tự bỏ trùng, id phải tồn tại) và trả `scope` kèm tên. `POST /api/orders` và `POST /api/orders/guest` nhận thêm `couponCode` (không bắt buộc, chuỗi rỗng coi như không dùng); đơn trả thêm `discount` và `couponCode`.
 
 Quyết định thiết kế F09:
 
@@ -638,6 +643,10 @@ Quyết định thiết kế F09:
 - **Tiền hàng sau giảm quyết định phí ship và điểm** (theo yêu cầu nhóm 30/10/2026): `shippingFee = calculateShippingFee(subtotal - discount)`, `total = subtotal - discount + shippingFee`; `total_spent` và điểm cộng theo `subtotal - discount`. `orders.subtotal` vẫn là tiền hàng gốc để đối chiếu với các dòng hàng.
 - **`lib/coupon.js` là hàm thuần** (`calculateDiscount`, `couponProblem`, `couponState`): dùng chung cho xem trước, đặt hàng và trạng thái hiển thị của Admin, test riêng không cần CSDL.
 - **Không xóa mã:** khóa ngoại `orders.coupon_id` là `RESTRICT` và đơn đã lưu bản sao mã; muốn ngừng dùng thì tắt (như BR-09). Không đổi được `code`.
+- **Xem trước theo giỏ hàng, không theo số tiền:** mã có phạm vi cần biết danh mục, thương hiệu và giá của từng món nên Client gửi `items` và máy chủ tự lấy giá từ CSDL. Xem trước và đặt hàng gọi CHUNG một hàm `assertUsable` (thứ tự kiểm tra cố định: còn hiệu lực, đủ điểm, có sản phẩm được áp dụng, đạt đơn tối thiểu), nên hai nơi không thể lệch nhau (có test so sánh trực tiếp).
+- **Phạm vi là hợp của ba danh sách; đơn tối thiểu và số tiền giảm tính trên phần được áp dụng.** Ví dụ mã giảm 20% cho danh mục Phụ kiện, đơn tối thiểu 300.000 đ: giỏ có điện thoại 6 triệu và cáp 290.000 đ bị từ chối vì phần phụ kiện chưa đủ 300.000 đ (quyết định của nhóm 30/10/2026).
+- **Phạm vi lưu dạng mảng, không khóa ngoại:** xóa sản phẩm, danh mục hoặc thương hiệu không bị khóa ngoại chặn và không âm thầm mở rộng mã ra mọi sản phẩm: id còn lại chỉ không khớp ai. Admin vẫn thấy id đó ghi "đã xóa" để bỏ đi. Đổi lại CSDL không bảo đảm id tồn tại, nên chỉ máy chủ kiểm tra khi tạo và sửa mã (xem TECH_DEBT.md); `CHECK` giới hạn mỗi danh sách 50 phần tử.
+- **Điểm tối thiểu đọc không khóa:** điểm thành viên chỉ tăng (không có chỗ tiêu điểm) nên không thể tụt xuống dưới ngưỡng giữa lúc kiểm tra và giữ chỗ lượt dùng.
 - **Chống dò mã:** `POST /api/coupons/preview` công khai nên có giới hạn tốc độ riêng (`COUPON_RATE_LIMIT`); mã luôn so sánh sau khi chuẩn hóa in hoa.
 
 ### Quyết định bảo mật của F01
@@ -916,6 +925,7 @@ Quyết định: ẩn đánh giá không hỏi xác nhận (khác khóa tài kho
 | `CouponBox` (Client)                  | Bước 4 của trang đặt hàng: ô nhập mã (tự in hoa), nút Áp dụng; mã hợp lệ hiện "Đã áp dụng mã X: giảm Y" kèm nút Bỏ mã; mã lỗi hiện đúng lý do và nút Xóa mã. Phím Enter chỉ áp mã, không gửi đơn vì ô nằm trong form đặt hàng.           |
 | `useCouponPreview` (Client)           | Gọi `POST /coupons/preview` với khóa cache gồm mã và tiền hàng, nên giỏ đổi thì tự kiểm tra lại. Khi kiểm tra lại mà lỗi thì bỏ kết quả cũ (không giữ "đã áp dụng" của mã vừa hết hạn) và mã lỗi không được gửi kèm đơn.                 |
 | `CheckoutPage`, `OrderPage`           | Thêm dòng "Mã giảm giá (X) -Y"; phí ship, tổng và điểm dự kiến tính trên tiền hàng sau giảm; đặt hàng bị từ chối vì mã (vừa hết lượt) thì hiện lỗi và kiểm tra lại ô mã. Trang chi tiết đơn của Admin cũng hiện dòng này.                |
+| `CouponScopePicker` (Admin)           | Chọn phạm vi trong form mã: tìm sản phẩm theo tên hoặc SKU rồi bấm Thêm (thẻ có nút bỏ), ô chọn danh mục và thương hiệu; id đã bị xóa hiện "đã xóa" để bỏ đi được; lỗi do máy chủ báo (id không tồn tại) hiện ngay dưới ô.               |
 | `CouponsPage` (Admin, `/ma-giam-gia`) | Bảng mã (mức giảm, đơn tối thiểu, thời hạn, đã dùng/tối đa, trạng thái), tìm theo mã (chờ 300 ms), lọc bật/tắt, phân trang; form thêm và sửa ngay trên trang (mã bị khóa khi sửa); nút Tắt/Bật không hỏi xác nhận vì hoàn tác ngay được. |
 
 Quyết định: ô nhập mã đặt sau ghi chú (bước 4) thay vì trong khung tổng tiền để khung tóm tắt giữ gọn; số tiền giảm hiện ngay trong khung tóm tắt. Ngày giờ của mã nhập bằng `datetime-local` theo giờ trình duyệt của Admin rồi gửi lên dạng UTC (xem TECH_DEBT.md).

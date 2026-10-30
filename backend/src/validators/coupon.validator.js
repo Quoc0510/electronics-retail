@@ -2,6 +2,7 @@
  * @feature [F09] Mã giảm giá - Kiểm tra dữ liệu vào cho API mã giảm giá (US-24, US-25).
  */
 import { z } from 'zod';
+import { guestCartSchema } from './cart.validator.js';
 
 const COUPON_TYPES = ['PERCENT', 'FIXED'];
 const MAX_AMOUNT = 2_000_000_000; // giữ trong giới hạn Int của PostgreSQL
@@ -22,6 +23,20 @@ const money = (label) =>
 
 const date = (label) => z.coerce.date({ error: `${label} không hợp lệ` });
 
+// Danh sách id phạm vi áp dụng: số nguyên dương, bỏ trùng, tối đa 50 (khớp ràng buộc CHECK của CSDL)
+export const MAX_SCOPE_IDS = 50;
+const idList = (label) =>
+  z
+    .array(
+      z
+        .number({ error: `Mã ${label} phải là số` })
+        .int(`Mã ${label} phải là số nguyên`)
+        .positive(`Mã ${label} không hợp lệ`),
+      { error: `Danh sách ${label} không hợp lệ` },
+    )
+    .max(MAX_SCOPE_IDS, `Chọn tối đa ${MAX_SCOPE_IDS} ${label}`)
+    .transform((ids) => [...new Set(ids)]);
+
 const fields = {
   type: z.enum(COUPON_TYPES, { error: 'Loại mã phải là PERCENT hoặc FIXED' }),
   value: money('Mức giảm').min(1, 'Mức giảm phải lớn hơn 0'),
@@ -34,6 +49,11 @@ const fields = {
     .min(1, 'Số lượt tối đa phải từ 1')
     .max(1_000_000, 'Số lượt tối đa quá lớn'),
   isActive: z.boolean({ error: 'Trạng thái phải là true hoặc false' }),
+  // Điều kiện phụ: điểm thành viên tối thiểu (0 = không yêu cầu) và phạm vi áp dụng (cả ba rỗng = mọi sản phẩm)
+  minPoints: money('Điểm tối thiểu'),
+  productIds: idList('sản phẩm'),
+  categoryIds: idList('danh mục'),
+  brandIds: idList('thương hiệu'),
 };
 
 export const createCouponSchema = z.object({
@@ -45,6 +65,10 @@ export const createCouponSchema = z.object({
   endsAt: fields.endsAt,
   maxUses: fields.maxUses,
   isActive: fields.isActive.default(true),
+  minPoints: fields.minPoints.default(0),
+  productIds: fields.productIds.default([]),
+  categoryIds: fields.categoryIds.default([]),
+  brandIds: fields.brandIds.default([]),
 });
 
 // Sửa từng phần; không nhận `code` (không đổi được mã). Quy tắc nhìn cả bộ giá trị do service kiểm tra
@@ -57,15 +81,19 @@ export const updateCouponSchema = z
     endsAt: fields.endsAt.optional(),
     maxUses: fields.maxUses.optional(),
     isActive: fields.isActive.optional(),
+    minPoints: fields.minPoints.optional(),
+    productIds: fields.productIds.optional(),
+    categoryIds: fields.categoryIds.optional(),
+    brandIds: fields.brandIds.optional(),
   })
   .refine((data) => Object.keys(data).length > 0, {
     message: 'Không có thông tin nào để cập nhật',
   });
 
-// US-25: tiền hàng hiện tại của khách (chỉ để xem trước, đặt hàng tính lại từ giỏ thật)
+// US-25: giỏ hàng hiện tại của khách (chỉ để xem trước; máy chủ tự lấy giá từ CSDL và đặt hàng tính lại từ giỏ thật)
 export const previewCouponSchema = z.object({
   code: couponCode,
-  subtotal: money('Tiền hàng'),
+  items: guestCartSchema.shape.items.min(1, 'Giỏ hàng đang trống'),
 });
 
 export const listCouponsQuerySchema = z.object({
