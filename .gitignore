@@ -23,3 +23,6 @@ backend/uploads/*
 .claude/
 
 *.docx
+# [F15] Kết quả chạy E2E (Playwright)
+playwright-report
+test-results

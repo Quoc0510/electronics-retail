@@ -21,6 +21,9 @@
     "format:check": "prettier --check .",
     "test": "npm run test -w shared && npm run test -w backend && npm run test -w client && npm run test -w admin",
     "test:coverage": "npm run test:coverage -w shared && npm run test:coverage -w backend && npm run test:coverage -w client && npm run test:coverage -w admin",
+    "e2e:up": "node e2e/stack.mjs up",
+    "e2e": "playwright test",
+    "e2e:down": "node e2e/stack.mjs down",
     "db:up": "docker compose up -d",
     "db:down": "docker compose down"
   },

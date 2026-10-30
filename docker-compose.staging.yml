@@ -33,6 +33,12 @@ services:
       # Client và Admin gọi API qua nginx cùng origin nên CORS gần như không dùng tới; chỉ liệt kê đúng hai địa chỉ này
       CORS_ORIGINS: ${CORS_ORIGINS:-http://localhost:8080,http://localhost:8081}
       TRUST_PROXY: '1'
+      # Giới hạn tốc độ: giữ mặc định của backend, chỉ hệ thống kiểm thử E2E (e2e/stack.mjs) mới nâng lên
+      API_RATE_LIMIT: ${API_RATE_LIMIT:-300}
+      LOGIN_RATE_LIMIT: ${LOGIN_RATE_LIMIT:-10}
+      GUEST_ORDER_RATE_LIMIT: ${GUEST_ORDER_RATE_LIMIT:-10}
+      ORDER_LOOKUP_RATE_LIMIT: ${ORDER_LOOKUP_RATE_LIMIT:-20}
+      COUPON_RATE_LIMIT: ${COUPON_RATE_LIMIT:-30}
     volumes:
       - staging-uploads:/data/uploads
 
