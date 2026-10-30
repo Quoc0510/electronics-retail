@@ -14,6 +14,7 @@ import NotFoundPage from './pages/NotFoundPage.jsx';
 import OrderDetailPage from './pages/OrderDetailPage.jsx'; // [F07]
 import OrdersPage from './pages/OrdersPage.jsx'; // [F07]
 import ProductFormPage from './pages/ProductFormPage.jsx'; // [F03]
+import ProductImportPage from './pages/ProductImportPage.jsx'; // [F14]
 import ProductsPage from './pages/ProductsPage.jsx'; // [F03]
 import ReviewsPage from './pages/ReviewsPage.jsx'; // [F08]
 import UsersPage from './pages/UsersPage.jsx'; // [F10]
@@ -33,6 +34,8 @@ export default function App() {
           {/* [F03] Quản lý sản phẩm */}
           <Route path="/san-pham" element={<ProductsPage />} />
           <Route path="/san-pham/them" element={<ProductFormPage />} />
+          {/* [F14] Nhập sản phẩm từ Excel */}
+          <Route path="/san-pham/nhap-excel" element={<ProductImportPage />} />
           <Route path="/san-pham/:id" element={<ProductFormPage />} />
           {/* [F07] Quản lý đơn hàng */}
           <Route path="/don-hang" element={<OrdersPage />} />

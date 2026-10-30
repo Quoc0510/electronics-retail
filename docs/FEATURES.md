@@ -21,6 +21,7 @@ Mỗi file code có header `@feature [Fxx] ...` để truy vết file → tính 
 | F11 | Mở rộng (VNPay/ZaloPay sandbox, email)                    | Chỉ làm nếu dư thời gian         | Chưa làm         |
 | F12 | Trải nghiệm mở rộng: chế độ tối, so sánh, trang thông tin | Có thể làm thêm                  | Xong             |
 | F13 | Đặt hàng không cần đăng nhập và điểm thành viên           | Bắt buộc (yêu cầu bổ sung 28/10) | Xong             |
+| F14 | Nhập sản phẩm từ Excel (thêm mới, cập nhật hàng loạt)     | Có thể làm thêm                  | Xong (chờ merge) |
 
 F12 (đợt 1) gồm: chế độ tối, so sánh sản phẩm, trang thông tin (Giới thiệu, Liên hệ, Hỏi đáp, Chính sách), các khối trang chủ mới (thương hiệu, banner, số liệu, sản phẩm đã xem). Đợt 2 (cần backend, làm sau F05-F07): form liên hệ lưu tin nhắn, đăng ký nhận tin, yêu thích và đánh giá (F08), tin tức.
 
@@ -29,6 +30,8 @@ F10: trang tổng quan Admin có doanh thu 30 ngày (biểu đồ cột), số �
 F08: khách đã nhận hàng (đơn hoàn thành) đánh giá 1-5 sao kèm bình luận, sửa được đánh giá của mình, điểm trung bình hiện trên thẻ và trang chi tiết; thành viên lưu sản phẩm yêu thích (tối đa 100) và xem ở trang /yeu-thich; Admin ẩn hoặc bỏ ẩn đánh giá vi phạm ở trang Đánh giá. Chưa có xóa đánh giá, ảnh trong đánh giá, trả lời của cửa hàng (xem TECH_DEBT.md).
 
 F09: Admin tạo, sửa, bật/tắt mã giảm giá (giảm theo % hoặc số tiền, đơn tối thiểu, thời hạn, số lượt tối đa) ở trang Mã giảm giá; khách và thành viên nhập mã ở trang đặt hàng, thấy ngay số tiền giảm, mỗi đơn một mã. Phí vận chuyển và điểm thành viên tính trên tiền hàng sau giảm; hủy đơn trả lại lượt dùng mã. Chưa có mã riêng cho từng người, giới hạn mỗi người một lần hay mức giảm tối đa cho mã phần trăm (xem TECH_DEBT.md).
+
+F14: Admin vào Sản phẩm, chọn Nhập từ Excel, chọn "Thêm mới" hoặc "Cập nhật", tải file mẫu, điền rồi tải lên. Có bước xem trước (dòng đúng, dòng sai kèm cột và lý do), chỉ nhập các dòng đúng và tải được file các dòng lỗi để sửa. Tối đa 500 dòng, 2MB mỗi lần; ảnh sản phẩm không nhập bằng Excel (xem TECH_DEBT.md).
 
 F13 (yêu cầu bổ sung 28/10 sau khi dùng thử): khách chưa đăng nhập vẫn đặt hàng được, tra cứu và hủy đơn bằng mã đơn + số điện thoại; thành viên được tích điểm khi đơn hoàn thành (điểm tính theo tổng tiền hàng đã mua, mỗi 1.000.000 đ được 1 điểm, phần lẻ cộng dồn). Chưa có đổi điểm lấy ưu đãi.
 

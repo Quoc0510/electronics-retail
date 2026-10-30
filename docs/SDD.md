@@ -362,6 +362,7 @@ Pipeline CI (`.github/workflows/ci.yml`) gồm 6 chặng: lint và format; test 
 | 30/10/2026 | Mã giảm giá (F09): bảng `coupons`, `orders.discount`, `orders.coupon_id`, `orders.coupon_code` (migration `20261030000000_coupons`); `POST /api/coupons/preview`, `GET/POST/PATCH /api/admin/coupons`; `POST /api/orders` và `/api/orders/guest` nhận `couponCode`; phí vận chuyển và điểm thành viên tính trên tiền hàng sau giảm | Hoàn thành chức năng bổ sung F09 (US-24, US-25)                                                                         |
 | 30/10/2026 | Đóng gói Docker (`backend/Dockerfile`, `frontend.Dockerfile`, `docker-compose.staging.yml`), CI mở rộng lên 6 chặng, backend nhận `TRUST_PROXY`                                                                                                                                                                                    | Hoàn thiện phần triển khai và vận hành (TC2.6)                                                                          |
 | 31/10/2026 | Điều kiện phụ của mã giảm giá (F09): `coupons.min_points`, `product_ids`, `category_ids`, `brand_ids` (migration `20261031000000_coupon_conditions`); `POST /api/coupons/preview` nhận giỏ hàng `items` thay cho `subtotal` và cho phép đăng nhập tùy chọn; lỗi mới `COUPON_MIN_POINTS`, `COUPON_NOT_APPLICABLE`                   | Yêu cầu của nhóm: mã có điều kiện điểm thành viên và áp dụng cho sản phẩm, danh mục, thương hiệu                        |
+| 31/10/2026 | Nhập sản phẩm từ Excel (F14): `GET /api/admin/products/import/template`, `POST /api/admin/products/import/preview`, `/import`, `/import/errors`; không đổi schema; thêm hai thư viện `read-excel-file` và `write-excel-file` (MIT)                                                                                                 | Yêu cầu của nhóm: thêm và cập nhật sản phẩm hàng loạt bằng file Excel                                                   |
 | 28/10/2026 | `addresses.district` cho phép rỗng; địa chỉ ghép bỏ phần trống                                                                                                                                                                                                                                                                     | Nhiều địa phương đã bỏ cấp quận/huyện nên không thể bắt khách nhập                                                      |
 
 ## 9. Danh sách API đã triển khai
@@ -649,6 +650,31 @@ Quyết định thiết kế F09:
 - **Điểm tối thiểu đọc không khóa:** điểm thành viên chỉ tăng (không có chỗ tiêu điểm) nên không thể tụt xuống dưới ngưỡng giữa lúc kiểm tra và giữ chỗ lượt dùng.
 - **Chống dò mã:** `POST /api/coupons/preview` công khai nên có giới hạn tốc độ riêng (`COUPON_RATE_LIMIT`); mã luôn so sánh sau khi chuẩn hóa in hoa.
 
+### F14 - Nhập sản phẩm từ Excel
+
+Tất cả đều là API quản trị (ADMIN). `mode` nằm trên query: `create` (thêm mới) hoặc `update` (cập nhật). File gửi lên là multipart, trường `file`.
+
+| Method | Đường dẫn                           | Mô tả                                                                                                                                                | User story   |
+| ------ | ----------------------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------- | ------------ |
+| GET    | /api/admin/products/import/template | Tải file mẫu `.xlsx`: trang "Sản phẩm" (tiêu đề cột; chế độ `update` điền sẵn tối đa 500 sản phẩm mới nhất), "Danh mục và thương hiệu", "Hướng dẫn"  | US-35, US-36 |
+| POST   | /api/admin/products/import/preview  | Đọc và kiểm tra từng dòng, KHÔNG ghi: `summary { total, ok, failed }`, `rows[] { row, sku, status, errors[] { column, message } }`, `ignoredColumns` | US-35, US-36 |
+| POST   | /api/admin/products/import          | Kiểm tra lại từ đầu rồi ghi các dòng hợp lệ: `summary { total, created, updated, failed }` và kết quả từng dòng (`CREATED`, `UPDATED`, `ERROR`)      | US-35, US-36 |
+| POST   | /api/admin/products/import/errors   | Trả file `.xlsx` chỉ gồm các dòng sai (giữ nguyên ô đã nhập) kèm cột "Lỗi"; 400 `IMPORT_NO_ERRORS` nếu không có dòng sai                             | US-35, US-36 |
+
+Cột của file (đúng thứ tự trong file mẫu; tiêu đề không phân biệt hoa thường và dấu): SKU, Tên sản phẩm, Danh mục, Thương hiệu, Giá gốc, Giá khuyến mãi, Tồn kho, Mô tả, Thông số, Hiển thị. Chế độ `create` bắt buộc có cột và giá trị của SKU, tên, danh mục, thương hiệu, giá gốc; chế độ `update` chỉ bắt buộc cột SKU và ít nhất một cột cần sửa. Mã lỗi toàn file: `IMPORT_NO_FILE`, `IMPORT_NOT_XLSX`, `IMPORT_INVALID_FILE`, `IMPORT_EMPTY`, `IMPORT_HEADERS_MISSING` (kèm `details.missing`), `IMPORT_TOO_MANY_ROWS` (400), `IMPORT_FILE_TOO_LARGE` (413).
+
+Quyết định thiết kế F14:
+
+- **Hai bước không lưu trạng thái:** xem trước chỉ đọc; bước nhập đọc và kiểm tra lại file từ đầu thay vì tin dữ liệu Client gửi lên hay một bản xem trước đã lưu. Nếu giữa hai bước có người thêm cùng SKU thì dòng đó báo lỗi thay vì ghi đè (có test).
+- **Hai chế độ tách riêng** (theo yêu cầu của nhóm): thêm mới không bao giờ sửa sản phẩm đã có, cập nhật không bao giờ tạo sản phẩm mới. Một lỗi chọn nhầm chế độ chỉ làm dòng bị bỏ qua và báo lỗi, không làm hỏng dữ liệu.
+- **Dùng lại đúng đường của trang quản lý sản phẩm:** kiểm tra bằng cùng schema Zod (`createProductSchema`, `updateProductSchema`, `skuSchema`) và ghi bằng `createProduct`, `updateProduct` nên mọi quy tắc (SKU duy nhất, BR-02, danh mục và thương hiệu có thật, sinh slug) giống thao tác tay. Riêng BR-02 ở chế độ cập nhật được kiểm tra thêm với giá đang lưu ngay lúc xem trước, vì Zod chỉ so được khi dòng có cả hai giá.
+- **Mỗi dòng ghi độc lập, không gộp một transaction:** dòng lỗi không chặn dòng đúng và kết quả báo từng dòng. Đổi lại nếu máy chủ sập giữa chừng thì một phần dòng đã ghi; nhập lại ở chế độ thêm mới sẽ báo SKU đã có cho các dòng đó nên nhập tiếp phần còn lại được (TECH_DEBT.md).
+- **Đọc ô chặt chẽ:** số tiền là số nguyên đồng, nhận `1500000` và `1.500.000` (nhóm ba chữ số đúng chuẩn), từ chối `1,5` hay `99.5` vì dễ hiểu nhầm; danh mục và thương hiệu so tên không phân biệt hoa thường và khoảng trắng thừa nhưng GIỮ dấu để không khớp nhầm; chuỗi bắt đầu bằng `=` chỉ được coi là chữ vì thư viện chỉ đọc giá trị, không tính công thức.
+- **Kiểm tra file bằng nội dung thật:** file phải bắt đầu bằng chữ ký zip của `.xlsx` (đổi đuôi `.csv` hay `.xls` vẫn bị từ chối), tối đa 2MB (giữ trong bộ nhớ, không ghi ra đĩa), tối đa 500 dòng, chỉ đọc trang tính đầu tiên.
+- **Số dòng báo cho Admin là số dòng thật trong Excel** (dòng tiêu đề là dòng 1, dòng trống vẫn được đếm), để Admin tìm đúng chỗ cần sửa.
+- **Vòng sửa và nhập lại:** file "dòng lỗi" giữ nguyên ô đã nhập kèm cột "Lỗi" và có dạng đúng như file nhập (cột "Lỗi" ở cuối bị bỏ qua vì không phải cột lạ gây lỗi), nên sửa xong tải lên lại ngay. Chỉ tải được ở bước xem trước, vì sau khi nhập các dòng đúng đã nằm trong hệ thống.
+- **Thư viện:** `read-excel-file` và `write-excel-file` (MIT, nhẹ). Không dùng `xlsx` (SheetJS) vì bản trên npm đã cũ và có lỗ hổng đã biết.
+
 ### Quyết định bảo mật của F01
 
 - Access token JWT sống 15 phút; refresh token là chuỗi ngẫu nhiên 256 bit sống 7 ngày, DB chỉ lưu bản băm SHA-256.
@@ -672,16 +698,17 @@ Client và Admin dùng chung `shared` để không viết lặp logic đăng nh�
 
 ### Route
 
-| Ứng dụng | Đường dẫn             | Yêu cầu       | Trang                                   | User story   |
-| -------- | --------------------- | ------------- | --------------------------------------- | ------------ |
-| Client   | `/dang-nhap`          | Công khai     | Đăng nhập                               | US-02        |
-| Client   | `/dang-ky`            | Công khai     | Đăng ký                                 | US-01        |
-| Client   | `/tai-khoan`          | Đã đăng nhập  | Hồ sơ, đổi mật khẩu, sổ địa chỉ (3 mục) | US-04        |
-| Admin    | `/dang-nhap`          | Công khai     | Đăng nhập quản trị                      | US-02, US-05 |
-| Admin    | `/` và các trang khác | Vai trò ADMIN | Tổng quan (dashboard thống kê từ F10)   | US-05, US-26 |
-| Admin    | `/nguoi-dung`         | Vai trò ADMIN | Quản lý người dùng (F10)                | US-27        |
-| Admin    | `/danh-gia`           | Vai trò ADMIN | Quản lý đánh giá (F08)                  | US-23        |
-| Admin    | `/ma-giam-gia`        | Vai trò ADMIN | Quản lý mã giảm giá (F09)               | US-24        |
+| Ứng dụng | Đường dẫn              | Yêu cầu       | Trang                                   | User story   |
+| -------- | ---------------------- | ------------- | --------------------------------------- | ------------ |
+| Client   | `/dang-nhap`           | Công khai     | Đăng nhập                               | US-02        |
+| Client   | `/dang-ky`             | Công khai     | Đăng ký                                 | US-01        |
+| Client   | `/tai-khoan`           | Đã đăng nhập  | Hồ sơ, đổi mật khẩu, sổ địa chỉ (3 mục) | US-04        |
+| Admin    | `/dang-nhap`           | Công khai     | Đăng nhập quản trị                      | US-02, US-05 |
+| Admin    | `/` và các trang khác  | Vai trò ADMIN | Tổng quan (dashboard thống kê từ F10)   | US-05, US-26 |
+| Admin    | `/nguoi-dung`          | Vai trò ADMIN | Quản lý người dùng (F10)                | US-27        |
+| Admin    | `/danh-gia`            | Vai trò ADMIN | Quản lý đánh giá (F08)                  | US-23        |
+| Admin    | `/ma-giam-gia`         | Vai trò ADMIN | Quản lý mã giảm giá (F09)               | US-24        |
+| Admin    | `/san-pham/nhap-excel` | Vai trò ADMIN | Nhập sản phẩm từ Excel (F14)            | US-35, US-36 |
 
 ### Luồng làm mới phiên (US-03)
 
@@ -920,12 +947,21 @@ Quyết định: ẩn đánh giá không hỏi xác nhận (khác khóa tài kho
 
 ## 20. Giao diện mã giảm giá F09 (Client và Admin)
 
-| Thành phần                            | Vai trò                                                                                                                                                                                                                                  |
-| ------------------------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| `CouponBox` (Client)                  | Bước 4 của trang đặt hàng: ô nhập mã (tự in hoa), nút Áp dụng; mã hợp lệ hiện "Đã áp dụng mã X: giảm Y" kèm nút Bỏ mã; mã lỗi hiện đúng lý do và nút Xóa mã. Phím Enter chỉ áp mã, không gửi đơn vì ô nằm trong form đặt hàng.           |
-| `useCouponPreview` (Client)           | Gọi `POST /coupons/preview` với khóa cache gồm mã và tiền hàng, nên giỏ đổi thì tự kiểm tra lại. Khi kiểm tra lại mà lỗi thì bỏ kết quả cũ (không giữ "đã áp dụng" của mã vừa hết hạn) và mã lỗi không được gửi kèm đơn.                 |
-| `CheckoutPage`, `OrderPage`           | Thêm dòng "Mã giảm giá (X) -Y"; phí ship, tổng và điểm dự kiến tính trên tiền hàng sau giảm; đặt hàng bị từ chối vì mã (vừa hết lượt) thì hiện lỗi và kiểm tra lại ô mã. Trang chi tiết đơn của Admin cũng hiện dòng này.                |
-| `CouponScopePicker` (Admin)           | Chọn phạm vi trong form mã: tìm sản phẩm theo tên hoặc SKU rồi bấm Thêm (thẻ có nút bỏ), ô chọn danh mục và thương hiệu; id đã bị xóa hiện "đã xóa" để bỏ đi được; lỗi do máy chủ báo (id không tồn tại) hiện ngay dưới ô.               |
-| `CouponsPage` (Admin, `/ma-giam-gia`) | Bảng mã (mức giảm, đơn tối thiểu, thời hạn, đã dùng/tối đa, trạng thái), tìm theo mã (chờ 300 ms), lọc bật/tắt, phân trang; form thêm và sửa ngay trên trang (mã bị khóa khi sửa); nút Tắt/Bật không hỏi xác nhận vì hoàn tác ngay được. |
+| Thành phần                            | Vai trò                                                                                                                                                                                                                                                                                                               |
+| ------------------------------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `CouponBox` (Client)                  | Bước 4 của trang đặt hàng: ô nhập mã (tự in hoa), nút Áp dụng; mã hợp lệ hiện "Đã áp dụng mã X: giảm Y" kèm nút Bỏ mã; mã lỗi hiện đúng lý do và nút Xóa mã. Phím Enter chỉ áp mã, không gửi đơn vì ô nằm trong form đặt hàng.                                                                                        |
+| `useCouponPreview` (Client)           | Gọi `POST /coupons/preview` gửi GIỎ HÀNG (`productId`, `quantity`) chứ không gửi số tiền, với khóa cache gồm mã, người dùng và giỏ, nên giỏ đổi hoặc đăng nhập/đăng xuất thì tự kiểm tra lại. Khi kiểm tra lại mà lỗi thì bỏ kết quả cũ (không giữ "đã áp dụng" của mã vừa hết hạn) và mã lỗi không được gửi kèm đơn. |
+| `CheckoutPage`, `OrderPage`           | Thêm dòng "Mã giảm giá (X) -Y"; phí ship, tổng và điểm dự kiến tính trên tiền hàng sau giảm; đặt hàng bị từ chối vì mã (vừa hết lượt) thì hiện lỗi và kiểm tra lại ô mã. Trang chi tiết đơn của Admin cũng hiện dòng này.                                                                                             |
+| `CouponScopePicker` (Admin)           | Chọn phạm vi trong form mã: tìm sản phẩm theo tên hoặc SKU rồi bấm Thêm (thẻ có nút bỏ), ô chọn danh mục và thương hiệu; id đã bị xóa hiện "đã xóa" để bỏ đi được; lỗi do máy chủ báo (id không tồn tại) hiện ngay dưới ô.                                                                                            |
+| `CouponsPage` (Admin, `/ma-giam-gia`) | Bảng mã (mức giảm, đơn tối thiểu, thời hạn, đã dùng/tối đa, trạng thái), tìm theo mã (chờ 300 ms), lọc bật/tắt, phân trang; form thêm và sửa ngay trên trang (mã bị khóa khi sửa); nút Tắt/Bật không hỏi xác nhận vì hoàn tác ngay được.                                                                              |
 
 Quyết định: ô nhập mã đặt sau ghi chú (bước 4) thay vì trong khung tổng tiền để khung tóm tắt giữ gọn; số tiền giảm hiện ngay trong khung tóm tắt. Ngày giờ của mã nhập bằng `datetime-local` theo giờ trình duyệt của Admin rồi gửi lên dạng UTC (xem TECH_DEBT.md).
+
+## 21. Giao diện nhập sản phẩm từ Excel F14 (Admin)
+
+| Thành phần                                   | Vai trò                                                                                                                                                                                                                                                       |
+| -------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `ProductImportPage` (`/san-pham/nhap-excel`) | Ba bước: (1) chọn "Thêm sản phẩm mới" hoặc "Cập nhật sản phẩm đã có" và tải file mẫu; (2) chọn file `.xlsx` rồi Xem trước; (3) bảng kết quả xem trước (số dòng, trạng thái, lỗi theo cột) với nút "Thêm/Cập nhật N dòng hợp lệ" và "Tải các dòng lỗi để sửa". |
+| `ProductsPage`                               | Thêm nút "Nhập từ Excel" cạnh "Thêm sản phẩm".                                                                                                                                                                                                                |
+
+Quyết định: file sai loại hoặc quá 2MB bị chặn ngay ở trình duyệt (vẫn kiểm tra lại ở máy chủ); đổi kiểu nhập hoặc chọn file khác thì xóa kết quả xem trước cũ để không nhập nhầm theo bản xem trước của file khác; nhập xong khóa nút để bấm đúp không nhập hai lần; nút nhập ghi rõ số dòng sẽ được nhập; sau khi nhập thì làm mới danh sách sản phẩm đang lưu đệm.

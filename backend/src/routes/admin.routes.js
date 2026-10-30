@@ -11,6 +11,7 @@ import adminOrderRoutes from './adminOrder.routes.js'; // [F07]
 import { adminUserRouter, statsRouter } from './adminUser.routes.js'; // [F10]
 import adminReviewRoutes from './adminReview.routes.js'; // [F08]
 import adminCouponRoutes from './adminCoupon.routes.js'; // [F09]
+import productImportRoutes from './productImport.routes.js'; // [F14]
 
 const router = Router();
 
@@ -23,6 +24,9 @@ router.get('/me', (req, res) => {
 
 // [F02] Quản lý danh mục và thương hiệu: /api/admin/categories, /api/admin/brands
 router.use(adminCatalogRouter);
+
+// [F14] Nhập sản phẩm từ Excel: /api/admin/products/import/* (phải đứng TRƯỚC router sản phẩm vì có "/:id")
+router.use('/products/import', productImportRoutes);
 
 // [F03] Quản lý sản phẩm và ảnh: /api/admin/products
 router.use('/products', productRoutes);
