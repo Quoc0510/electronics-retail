@@ -33,6 +33,11 @@ export const authenticate = asyncHandler(async (req, _res, next) => {
   next();
 });
 
+// [F09] Cho phép cả khách chưa đăng nhập: có header Authorization thì kiểm tra như authenticate (token sai vẫn 401 để Client
+// làm mới phiên), không có thì đi tiếp với req.user rỗng. Dùng cho API công khai nhưng kết quả phụ thuộc người dùng
+export const optionalAuthenticate = (req, res, next) =>
+  req.headers.authorization ? authenticate(req, res, next) : next();
+
 // Phải đặt sau authenticate. Chưa đăng nhập -> 401 (do authenticate), sai quyền -> 403
 export const requireRole =
   (...roles) =>

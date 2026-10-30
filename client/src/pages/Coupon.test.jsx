@@ -93,8 +93,11 @@ const address = {
 };
 
 // Mã giả: GIAM10 giảm 10%, các mã khác báo lỗi theo tên
+// Tiền hàng của giỏ giả (một dòng, sản phẩm 101); máy chủ thật tự tính từ giá trong CSDL, ở đây mô phỏng bằng biến này
+let cartSubtotal = 2000000;
+
 const previewHandler = (config, body) => {
-  const bySubtotal = { PERCENT: Math.floor((body.subtotal * 10) / 100) };
+  const bySubtotal = { PERCENT: Math.floor((cartSubtotal * 10) / 100) };
   if (body.code === 'GIAM10') {
     return [
       200,
@@ -107,6 +110,44 @@ const previewHandler = (config, body) => {
   if (body.code === 'GIAM500K') {
     return [200, { code: 'GIAM500K', type: 'FIXED', value: 500000, minOrder: 0, discount: 500000 }];
   }
+  if (body.code === 'PHUKIEN') {
+    // Mã chỉ áp dụng cho một số sản phẩm: giảm trên phần được áp dụng (500.000 ₫) chứ không phải cả giỏ
+    return [
+      200,
+      {
+        code: 'PHUKIEN',
+        type: 'PERCENT',
+        value: 10,
+        minOrder: 0,
+        minPoints: 0,
+        scoped: true,
+        eligibleSubtotal: 500000,
+        discount: 50000,
+      },
+    ];
+  }
+  if (body.code === 'CANDIEM') {
+    return [
+      400,
+      apiError(
+        'COUPON_MIN_POINTS',
+        body.items
+          ? 'Mã này dành cho thành viên có từ 50 điểm trở lên. Hãy đăng nhập để dùng mã'
+          : '',
+        { minPoints: 50, points: null },
+      ),
+    ];
+  }
+  if (body.code === 'CANDIEMTV') {
+    return [
+      400,
+      apiError(
+        'COUPON_MIN_POINTS',
+        'Bạn cần có từ 50 điểm thành viên để dùng mã này (hiện có 3 điểm)',
+        { minPoints: 50, points: 3 },
+      ),
+    ];
+  }
   if (body.code === 'HETHAN') {
     return [400, apiError('COUPON_EXPIRED', 'Mã giảm giá đã hết hạn')];
   }
@@ -114,6 +155,7 @@ const previewHandler = (config, body) => {
 };
 
 const openCheckout = async (subtotal = 2000000, extra = {}) => {
+  cartSubtotal = subtotal;
   tokenStorage.setTokens(session);
   const calls = mockServer({
     ...storefrontApi,
@@ -159,7 +201,8 @@ describe('Ô nhập mã giảm giá ở trang đặt hàng (US-25)', () => {
       'Đã áp dụng mã GIAM10: giảm 200.000 ₫',
     );
     const preview = calls.find((c) => c.key === 'POST /coupons/preview');
-    expect(preview.body).toEqual({ code: 'GIAM10', subtotal: 2000000 }); // đã tự chuyển in hoa
+    // Gửi giỏ hàng (không gửi số tiền): máy chủ tự biết giá, danh mục, thương hiệu của từng món; mã đã tự chuyển in hoa
+    expect(preview.body).toEqual({ code: 'GIAM10', items: [{ productId: 101, quantity: 1 }] });
 
     expect(within(summary()).getByText('Mã giảm giá (GIAM10)')).toBeInTheDocument();
     expect(within(summary()).getByText('-200.000 ₫')).toBeInTheDocument();
@@ -211,6 +254,59 @@ describe('Ô nhập mã giảm giá ở trang đặt hàng (US-25)', () => {
     await screen.findByText(/Đã áp dụng mã/);
 
     expect(screen.queryByLabelText('Mã giảm giá')).not.toBeInTheDocument();
+  });
+});
+
+describe('Mã có điều kiện phụ (phạm vi, điểm tối thiểu)', () => {
+  it('mã chỉ áp dụng cho một số sản phẩm: ghi rõ và chỉ giảm trên phần được áp dụng', async () => {
+    await openCheckout(2000000);
+    await applyCode('phukien');
+
+    expect(await screen.findByText(/Đã áp dụng mã/)).toHaveTextContent(
+      'giảm 50.000 ₫ (chỉ áp dụng cho một số sản phẩm trong giỏ)',
+    );
+    // 2.000.000 - 50.000 + 30.000, không phải trừ 10% của cả giỏ
+    expect(within(summary()).getByText('-50.000 ₫')).toBeInTheDocument();
+    expect(within(summary()).getByText('1.980.000 ₫')).toBeInTheDocument();
+  });
+
+  it('thành viên chưa đủ điểm: báo số điểm cần và có, không có nút đăng nhập', async () => {
+    await openCheckout();
+    await applyCode('candiemtv');
+
+    expect(
+      await screen.findByText('Bạn cần có từ 50 điểm thành viên để dùng mã này (hiện có 3 điểm)'),
+    ).toBeInTheDocument();
+    expect(
+      screen.queryByRole('link', { name: 'Đăng nhập để dùng mã này' }),
+    ).not.toBeInTheDocument();
+    expect(within(summary()).queryByText(/Mã giảm giá \(/)).not.toBeInTheDocument();
+  });
+
+  it('khách chưa đăng nhập gặp mã cần điểm: báo lý do và mời đăng nhập, giỏ hàng giữ nguyên', async () => {
+    cartSubtotal = 2000000;
+    localStorage.setItem('techstore.guestCart', JSON.stringify([{ productId: 101, quantity: 1 }]));
+    mockServer({
+      ...storefrontApi,
+      'POST /cart/preview': [200, makeCart(2000000)],
+      'POST /coupons/preview': previewHandler,
+    });
+    renderApp('/dat-hang');
+    await screen.findByRole('heading', { name: 'Đặt hàng', level: 1 });
+    await applyCode('candiem');
+
+    expect(
+      await screen.findByText(
+        'Mã này dành cho thành viên có từ 50 điểm trở lên. Hãy đăng nhập để dùng mã',
+      ),
+    ).toBeInTheDocument();
+    expect(screen.getByRole('link', { name: 'Đăng nhập để dùng mã này' })).toHaveAttribute(
+      'href',
+      '/dang-nhap',
+    );
+    expect(JSON.parse(localStorage.getItem('techstore.guestCart'))).toEqual([
+      { productId: 101, quantity: 1 },
+    ]);
   });
 });
 

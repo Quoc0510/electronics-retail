@@ -1,6 +1,6 @@
 /**
  * @feature [F09] Quản lý mã giảm giá - Kiểm thử giao diện Admin: danh sách mã (trạng thái, tìm, lọc), tạo mã, sửa mã và
- * bật/tắt mã (US-24).
+ * bật/tắt mã, điều kiện phụ: điểm tối thiểu và phạm vi áp dụng (US-24).
  */
 import { describe, expect, it } from 'vitest';
 import { screen, waitFor, within } from '@testing-library/react';
@@ -20,9 +20,32 @@ const coupon = (id, overrides = {}) => ({
   usedCount: 4,
   isActive: true,
   state: 'RUNNING',
+  minPoints: 0,
+  scoped: false,
+  scope: { products: [], categories: [], brands: [] },
   createdAt: '2026-10-01T03:00:00.000Z',
   ...overrides,
 });
+
+// Danh mục, thương hiệu và sản phẩm để chọn phạm vi (form mã giảm giá tải chúng khi mở)
+const categories = [
+  { id: 1, name: 'Điện thoại', isActive: true },
+  { id: 2, name: 'Phụ kiện', isActive: true },
+  { id: 3, name: 'Hàng cũ', isActive: false },
+];
+const brands = [
+  { id: 10, name: 'Apple', isActive: true },
+  { id: 11, name: 'Anker', isActive: true },
+];
+const productSearch = (config) => {
+  const search = (config.params?.search ?? '').toLowerCase();
+  const all = [
+    { id: 5, name: 'iPhone 15', sku: 'IP15' },
+    { id: 6, name: 'iPad Air', sku: 'IPAD' },
+  ];
+  const items = all.filter((product) => product.name.toLowerCase().includes(search));
+  return [200, { items, page: 1, pageSize: 6, total: items.length }];
+};
 
 const listPage = (items, extra = {}) => ({
   items,
@@ -48,6 +71,9 @@ const open = (handlers = {}, route = '/ma-giam-gia') => {
         ]),
       ];
     },
+    'GET /admin/categories': [200, categories],
+    'GET /admin/brands': [200, brands],
+    'GET /admin/products': productSearch,
     ...handlers,
   });
   renderApp(route);
@@ -286,5 +312,158 @@ describe('Sửa và bật/tắt mã giảm giá (US-24 AC2)', () => {
     );
 
     expect(await screen.findByText('Không cập nhật được mã')).toBeInTheDocument();
+  });
+});
+
+describe('Điều kiện phụ: điểm tối thiểu và phạm vi áp dụng (US-24)', () => {
+  const scopedCoupon = coupon(7, {
+    code: 'PHAMVI',
+    minPoints: 50,
+    scoped: true,
+    scope: {
+      products: [{ id: 5, name: 'iPhone 15' }],
+      categories: [{ id: 2, name: 'Phụ kiện' }],
+      brands: [{ id: 99, name: null }],
+    },
+  });
+
+  it('bảng hiện phạm vi và điểm tối thiểu; mã không giới hạn hiện "Mọi sản phẩm"', async () => {
+    open({ 'GET /admin/coupons': [200, listPage([coupon(1), scopedCoupon])] });
+
+    const all = await rowOf('MA1');
+    expect(within(all).getByText('Mọi sản phẩm')).toBeInTheDocument();
+    expect(within(all).queryByText(/điểm thành viên/)).not.toBeInTheDocument();
+
+    const scoped = await rowOf('PHAMVI');
+    const summary = within(scoped).getByText('1 sản phẩm · 1 danh mục · 1 thương hiệu');
+    expect(summary).toHaveAttribute('title', expect.stringContaining('iPhone 15'));
+    expect(summary).toHaveAttribute('title', expect.stringContaining('#99 (đã xóa)'));
+    expect(within(scoped).getByText('Từ 50 điểm thành viên')).toBeInTheDocument();
+  });
+
+  it('tạo mã có điểm tối thiểu và phạm vi: gửi đúng id đã chọn', async () => {
+    const { calls } = open({ 'POST /admin/coupons': [201, scopedCoupon] });
+    await screen.findByRole('table');
+    await userEvent.click(screen.getByRole('button', { name: /Thêm mã giảm giá/ }));
+
+    await fill('Mã giảm giá', 'PHAMVI');
+    await fill('Mức giảm (%)', '10');
+    await fill('Điểm thành viên tối thiểu', '50');
+    await userEvent.click(await screen.findByRole('checkbox', { name: 'Phụ kiện' }));
+    await userEvent.click(await screen.findByRole('checkbox', { name: 'Anker' }));
+    await userEvent.type(screen.getByLabelText('Sản phẩm'), 'iph');
+    await userEvent.click(await screen.findByRole('button', { name: 'Thêm iPhone 15' }));
+    await userEvent.click(screen.getByRole('button', { name: 'Tạo mã' }));
+
+    await waitFor(() => expect(calls.some((c) => c.key === 'POST /admin/coupons')).toBe(true));
+    expect(calls.find((c) => c.key === 'POST /admin/coupons').body).toMatchObject({
+      code: 'PHAMVI',
+      minPoints: 50,
+      productIds: [5],
+      categoryIds: [2],
+      brandIds: [11],
+    });
+  });
+
+  it('không chọn phạm vi thì gửi ba danh sách rỗng và điểm tối thiểu 0', async () => {
+    const { calls } = open({ 'POST /admin/coupons': [201, coupon(9)] });
+    await screen.findByRole('table');
+    await userEvent.click(screen.getByRole('button', { name: /Thêm mã giảm giá/ }));
+    await fill('Mã giảm giá', 'MOISP');
+    await fill('Mức giảm (%)', '5');
+    await userEvent.click(screen.getByRole('button', { name: 'Tạo mã' }));
+
+    await waitFor(() => expect(calls.some((c) => c.key === 'POST /admin/coupons')).toBe(true));
+    expect(calls.find((c) => c.key === 'POST /admin/coupons').body).toMatchObject({
+      minPoints: 0,
+      productIds: [],
+      categoryIds: [],
+      brandIds: [],
+    });
+  });
+
+  it('sản phẩm đã chọn hiện "Đã chọn" và không thêm hai lần; bỏ được bằng nút x', async () => {
+    open();
+    await screen.findByRole('table');
+    await userEvent.click(screen.getByRole('button', { name: /Thêm mã giảm giá/ }));
+    await userEvent.type(screen.getByLabelText('Sản phẩm'), 'ip');
+    await userEvent.click(await screen.findByRole('button', { name: 'Thêm iPhone 15' }));
+
+    expect(screen.getByRole('button', { name: 'Thêm iPhone 15' })).toBeDisabled();
+    expect(screen.getByRole('button', { name: 'Thêm iPhone 15' })).toHaveTextContent('Đã chọn');
+    await userEvent.click(screen.getByRole('button', { name: 'Bỏ iPhone 15' }));
+    expect(screen.queryByRole('button', { name: 'Bỏ iPhone 15' })).not.toBeInTheDocument();
+    expect(screen.getByRole('button', { name: 'Thêm iPhone 15' })).toBeEnabled();
+  });
+
+  it('danh mục đang ẩn vẫn chọn được và được đánh dấu', async () => {
+    open();
+    await screen.findByRole('table');
+    await userEvent.click(screen.getByRole('button', { name: /Thêm mã giảm giá/ }));
+
+    expect(await screen.findByText(/Hàng cũ/)).toHaveTextContent('(đang ẩn)');
+  });
+
+  it('điểm tối thiểu sai thì báo lỗi và không gửi', async () => {
+    const { calls } = open();
+    await screen.findByRole('table');
+    await userEvent.click(screen.getByRole('button', { name: /Thêm mã giảm giá/ }));
+    await fill('Mã giảm giá', 'DIEMSAI');
+    await fill('Mức giảm (%)', '10');
+    await fill('Điểm thành viên tối thiểu', '-5');
+    await userEvent.click(screen.getByRole('button', { name: 'Tạo mã' }));
+
+    expect(await screen.findByText('Điểm tối thiểu phải là số nguyên từ 0')).toBeInTheDocument();
+    expect(calls.some((c) => c.key === 'POST /admin/coupons')).toBe(false);
+  });
+
+  it('sửa mã: điền sẵn điểm và phạm vi cũ; bỏ một mục rồi lưu gửi danh sách mới', async () => {
+    const { calls } = open({
+      'GET /admin/coupons': [200, listPage([scopedCoupon])],
+      'PATCH /admin/coupons/7': [200, scopedCoupon],
+    });
+    await userEvent.click(
+      await within(await rowOf('PHAMVI')).findByRole('button', { name: 'Sửa mã PHAMVI' }),
+    );
+
+    const form = screen.getByRole('form', { name: 'Sửa mã PHAMVI' });
+    expect(within(form).getByLabelText('Điểm thành viên tối thiểu')).toHaveValue('50');
+    expect(await within(form).findByRole('checkbox', { name: 'Phụ kiện' })).toBeChecked();
+    expect(within(form).getByRole('checkbox', { name: 'Điện thoại' })).not.toBeChecked();
+    expect(within(form).getByRole('button', { name: 'Bỏ iPhone 15' })).toBeInTheDocument();
+    // Thương hiệu id 99 đã bị xóa vẫn hiện để bỏ đi được
+    expect(
+      await within(form).findByRole('button', { name: 'Bỏ #99 (đã xóa)' }),
+    ).toBeInTheDocument();
+
+    await userEvent.click(within(form).getByRole('button', { name: 'Bỏ iPhone 15' }));
+    await userEvent.click(within(form).getByRole('button', { name: 'Bỏ #99 (đã xóa)' }));
+    await userEvent.click(within(form).getByRole('button', { name: 'Lưu thay đổi' }));
+
+    await waitFor(() => expect(calls.some((c) => c.key === 'PATCH /admin/coupons/7')).toBe(true));
+    expect(calls.find((c) => c.key === 'PATCH /admin/coupons/7').body).toMatchObject({
+      minPoints: 50,
+      productIds: [],
+      categoryIds: [2],
+      brandIds: [],
+    });
+  });
+
+  it('lỗi từ máy chủ về phạm vi (id không tồn tại) vẫn hiện cho Admin biết', async () => {
+    open({
+      'POST /admin/coupons': [
+        400,
+        apiError('VALIDATION_ERROR', 'Dữ liệu không hợp lệ', {
+          productIds: ['Có sản phẩm được chọn không tồn tại'],
+        }),
+      ],
+    });
+    await screen.findByRole('table');
+    await userEvent.click(screen.getByRole('button', { name: /Thêm mã giảm giá/ }));
+    await fill('Mã giảm giá', 'LOIPHAMVI');
+    await fill('Mức giảm (%)', '10');
+    await userEvent.click(screen.getByRole('button', { name: 'Tạo mã' }));
+
+    expect(await screen.findByText('Có sản phẩm được chọn không tồn tại')).toBeInTheDocument();
   });
 });

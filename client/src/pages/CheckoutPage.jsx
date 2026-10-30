@@ -115,7 +115,7 @@ export default function CheckoutPage() {
   const choice = selected ?? defaultChoice;
 
   // [F09] Số tiền giảm xem trước; phí ship (BR-05) và điểm (BR-15) đều tính trên tiền hàng SAU giảm (BR-14)
-  const coupon = useCouponPreview(couponCode, cart.subtotal);
+  const coupon = useCouponPreview(couponCode, cart.items, user?.id ?? null);
   const payable = cart.subtotal - coupon.discount;
   const fee = shippingFee(payable);
   const total = payable + fee;

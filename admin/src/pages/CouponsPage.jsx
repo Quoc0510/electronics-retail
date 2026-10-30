@@ -3,6 +3,7 @@
  * tạo mã mới (giảm theo % hoặc số tiền, đơn tối thiểu, thời hạn, số lượt tối đa), sửa mã, bật/tắt mã (AC2).
  * Không có nút xóa: mã đã gắn vào đơn hàng chỉ được tắt. Mã không đổi được sau khi tạo vì đơn cũ đã lưu bản sao mã (BR-04).
  * Mã đang chạy bị sửa thì chỉ ảnh hưởng các đơn đặt sau đó; đơn đã đặt giữ nguyên số tiền giảm.
+ * Điều kiện phụ: điểm thành viên tối thiểu và phạm vi áp dụng (sản phẩm, danh mục, thương hiệu - chọn ở CouponScopePicker).
  */
 import { useEffect, useState } from 'react';
 import { keepPreviousData, useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
@@ -19,6 +20,7 @@ import {
 } from '@techstore/shared';
 import { api } from '../lib/api.js';
 import PageHeader from '../components/PageHeader.jsx';
+import CouponScopePicker, { MAX_SCOPE_ITEMS } from '../components/CouponScopePicker.jsx'; // [F09]
 
 const PAGE_SIZE = 10;
 const DAY_MS = 24 * 3600 * 1000;
@@ -59,6 +61,10 @@ const emptyForm = () => {
     startsAt: toLocalInput(now),
     endsAt: toLocalInput(now + 30 * DAY_MS),
     maxUses: '100',
+    minPoints: '0',
+    products: [],
+    categoryIds: [],
+    brandIds: [],
   };
 };
 
@@ -70,6 +76,10 @@ const formFromCoupon = (coupon) => ({
   startsAt: toLocalInput(coupon.startsAt),
   endsAt: toLocalInput(coupon.endsAt),
   maxUses: String(coupon.maxUses),
+  minPoints: String(coupon.minPoints),
+  products: coupon.scope.products,
+  categoryIds: coupon.scope.categories.map((item) => item.id),
+  brandIds: coupon.scope.brands.map((item) => item.id),
 });
 
 const isWholeNumber = (text) => /^\d+$/.test(text.trim());
@@ -88,6 +98,14 @@ const validate = (values, editing) => {
   if (!isWholeNumber(values.maxUses) || Number(values.maxUses) < 1) {
     errors.maxUses = 'Số lượt tối đa phải là số nguyên từ 1';
   }
+  if (!isWholeNumber(values.minPoints)) errors.minPoints = 'Điểm tối thiểu phải là số nguyên từ 0';
+  if (
+    values.products.length > MAX_SCOPE_ITEMS ||
+    values.categoryIds.length > MAX_SCOPE_ITEMS ||
+    values.brandIds.length > MAX_SCOPE_ITEMS
+  ) {
+    errors.scope = `Mỗi loại chọn tối đa ${MAX_SCOPE_ITEMS} mục`;
+  }
   const start = new Date(values.startsAt);
   const end = new Date(values.endsAt);
   if (Number.isNaN(start.getTime())) errors.startsAt = 'Vui lòng chọn ngày bắt đầu';
@@ -97,6 +115,38 @@ const validate = (values, editing) => {
   }
   return errors;
 };
+
+// Tóm tắt điều kiện phụ của một mã trong bảng; di chuột để xem tên từng mục trong phạm vi
+function ScopeSummary({ coupon }) {
+  const { products, categories, brands } = coupon.scope;
+  const names = (list) => list.map((item) => item.name ?? `#${item.id} (đã xóa)`).join(', ');
+  const parts = [
+    products.length > 0 && { label: `${products.length} sản phẩm`, title: names(products) },
+    categories.length > 0 && { label: `${categories.length} danh mục`, title: names(categories) },
+    brands.length > 0 && { label: `${brands.length} thương hiệu`, title: names(brands) },
+  ].filter(Boolean);
+
+  return (
+    <div className="space-y-0.5">
+      <div>
+        {parts.length === 0 ? (
+          'Mọi sản phẩm'
+        ) : (
+          <span
+            title={parts
+              .map((part) => `${part.label}: ${part.title}`)
+              .join(String.fromCharCode(10))}
+          >
+            {parts.map((part) => part.label).join(' · ')}
+          </span>
+        )}
+      </div>
+      {coupon.minPoints > 0 && (
+        <div className="text-xs text-slate-500">Từ {coupon.minPoints} điểm thành viên</div>
+      )}
+    </div>
+  );
+}
 
 function CouponForm({ coupon, onDone, onCancel }) {
   const editing = Boolean(coupon);
@@ -111,6 +161,10 @@ function CouponForm({ coupon, onDone, onCancel }) {
       startsAt: new Date(values.startsAt).toISOString(),
       endsAt: new Date(values.endsAt).toISOString(),
       maxUses: Number(values.maxUses),
+      minPoints: Number(values.minPoints),
+      productIds: values.products.map((product) => product.id),
+      categoryIds: values.categoryIds,
+      brandIds: values.brandIds,
     };
     if (editing) await api.patch(`/admin/coupons/${coupon.id}`, payload);
     else await api.post('/admin/coupons', { ...payload, code: values.code.trim() });
@@ -147,7 +201,32 @@ function CouponForm({ coupon, onDone, onCancel }) {
         <FormField label="Bắt đầu" type="datetime-local" {...form.bind('startsAt')} />
         <FormField label="Kết thúc" type="datetime-local" {...form.bind('endsAt')} />
         <FormField label="Số lượt dùng tối đa" inputMode="numeric" {...form.bind('maxUses')} />
+        <FormField
+          label="Điểm thành viên tối thiểu"
+          inputMode="numeric"
+          {...form.bind('minPoints')}
+        />
       </div>
+      <p className="-mt-2 text-sm text-slate-500">
+        Điểm tối thiểu: người dùng mã phải đang có ít nhất chừng này điểm thành viên (0 = không yêu
+        cầu). Khách chưa đăng nhập tính là 0 điểm.
+      </p>
+      <CouponScopePicker
+        products={form.values.products}
+        categoryIds={form.values.categoryIds}
+        brandIds={form.values.brandIds}
+        onChange={(patch) =>
+          Object.entries(patch).forEach(([name, value]) => form.setFieldValue(name, value))
+        }
+      />
+      {/* Lỗi của ô phạm vi (kiểm tra ở form hoặc do máy chủ báo id không tồn tại): ba danh sách không phải FormField nên tự hiện */}
+      {[form.errors.scope, form.errors.productIds, form.errors.categoryIds, form.errors.brandIds]
+        .filter(Boolean)
+        .map((message) => (
+          <p key={message} role="alert" className="text-sm text-rose-600">
+            {message}
+          </p>
+        ))}
       {editing && (
         <p className="text-sm text-slate-500">
           Đã dùng {coupon.usedCount} lượt. Số lượt tối đa không được nhỏ hơn số này. Đơn đã đặt giữ
@@ -285,6 +364,7 @@ export default function CouponsPage() {
                   <th className="whitespace-nowrap px-4 py-3 font-medium">Mã</th>
                   <th className="whitespace-nowrap px-4 py-3 font-medium">Mức giảm</th>
                   <th className="whitespace-nowrap px-4 py-3 font-medium">Đơn tối thiểu</th>
+                  <th className="whitespace-nowrap px-4 py-3 font-medium">Điều kiện</th>
                   <th className="whitespace-nowrap px-4 py-3 font-medium">Thời hạn</th>
                   <th className="whitespace-nowrap px-4 py-3 font-medium">Đã dùng</th>
                   <th className="whitespace-nowrap px-4 py-3 font-medium">Trạng thái</th>
@@ -305,6 +385,9 @@ export default function CouponsPage() {
                       </td>
                       <td className="whitespace-nowrap px-4 py-3 text-slate-600">
                         {coupon.minOrder > 0 ? formatVnd(coupon.minOrder) : 'Không'}
+                      </td>
+                      <td className="px-4 py-3 text-slate-600">
+                        <ScopeSummary coupon={coupon} />
                       </td>
                       <td className="whitespace-nowrap px-4 py-3 text-slate-600">
                         {formatDateTime(coupon.startsAt)}

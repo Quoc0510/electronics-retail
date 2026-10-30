@@ -193,6 +193,9 @@ const reserveLines = async (tx, entries) => {
 
     lines.push({
       productId: product.id,
+      // [F09] Chỉ để xét phạm vi mã giảm giá; không lưu vào dòng đơn (insertOrder bỏ hai trường này)
+      categoryId: product.categoryId,
+      brandId: product.brandId,
       productName: product.name, // BR-04: bản sao tại thời điểm đặt
       productSku: product.sku,
       unitPrice: product.salePrice ?? product.price, // BR-02
@@ -211,11 +214,20 @@ const reserveLines = async (tx, entries) => {
   return lines;
 };
 
+// Dữ liệu một dòng đơn (BR-04); bỏ các trường chỉ dùng để xét phạm vi mã giảm giá
+const toOrderItemData = (line) => ({
+  productId: line.productId,
+  productName: line.productName,
+  productSku: line.productSku,
+  unitPrice: line.unitPrice,
+  quantity: line.quantity,
+});
+
 // Tạo đơn kèm các dòng và dòng lịch sử đầu tiên; userId null = đơn của khách vãng lai (BR-11)
 const insertOrder = async (tx, { userId, lines, address, note, idempotencyKey, couponCode }) => {
   const subtotal = lines.reduce((sum, line) => sum + line.unitPrice * line.quantity, 0);
   // [F09] Dùng mã (nếu có) NGAY trong transaction này: lỗi ở bước sau thì lượt dùng được hoàn lại cùng kho
-  const coupon = couponCode ? await redeemCoupon(tx, couponCode, subtotal) : null;
+  const coupon = couponCode ? await redeemCoupon(tx, couponCode, lines, userId) : null;
   const discount = coupon?.discount ?? 0;
   // BR-05, BR-14: miễn phí ship xét trên tiền hàng SAU giảm
   const shippingFee = calculateShippingFee(subtotal - discount);
@@ -238,7 +250,7 @@ const insertOrder = async (tx, { userId, lines, address, note, idempotencyKey, c
       phone: address.phone,
       shippingAddress: formatAddress(address), // BR-04
       note,
-      items: { create: lines },
+      items: { create: lines.map(toOrderItemData) },
       history: {
         create: {
           status: 'PENDING',

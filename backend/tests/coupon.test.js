@@ -8,7 +8,14 @@ import request from 'supertest';
 import { randomUUID } from 'node:crypto';
 import { app } from '../src/app.js';
 import { prisma } from '../src/lib/prisma.js';
-import { calculateDiscount, couponProblem, couponState } from '../src/lib/coupon.js';
+import {
+  calculateDiscount,
+  couponProblem,
+  couponState,
+  eligibleLines,
+  hasScope,
+  linesSubtotal,
+} from '../src/lib/coupon.js';
 import { createUser, loginAs, resetDatabase } from './helpers.js';
 
 beforeEach(resetDatabase);
@@ -88,8 +95,16 @@ const guestOrder = (items, extra = {}) =>
     .post('/api/orders/guest')
     .send({ items, shipping, requestId: randomUUID(), ...extra });
 
-const preview = (code, subtotal) =>
-  request(app).post('/api/coupons/preview').send({ code, subtotal });
+// Xem trước theo giỏ hàng: tạo một sản phẩm có giá đúng bằng `subtotal` rồi xem trước giỏ gồm đúng sản phẩm đó
+const previewItems = (code, items, token) => {
+  const req = request(app).post('/api/coupons/preview');
+  if (token) req.set(auth(token));
+  return req.send({ code, items });
+};
+const preview = async (code, subtotal, token) => {
+  const product = await makeProduct({ price: subtotal });
+  return previewItems(code, [{ productId: product.id, quantity: 1 }], token);
+};
 const couponRow = (code = 'GIAM10') => prisma.coupon.findUnique({ where: { code } });
 const stockOf = async (product) =>
   (await prisma.product.findUnique({ where: { id: product.id } })).stock;
@@ -377,6 +392,9 @@ describe('POST /api/coupons/preview (US-25)', () => {
       type: 'PERCENT',
       value: 10,
       minOrder: 0,
+      minPoints: 0,
+      scoped: false,
+      eligibleSubtotal: 2_000_000,
       discount: 200_000,
     });
   });
@@ -425,7 +443,7 @@ describe('POST /api/coupons/preview (US-25)', () => {
     const res = await preview('GIAM10', 1_999_999);
     expect(res.status).toBe(400);
     expect(res.body.error.code).toBe('COUPON_MIN_ORDER');
-    expect(res.body.error.details).toEqual({ minOrder: 2_000_000 });
+    expect(res.body.error.details).toEqual({ minOrder: 2_000_000, scoped: false });
     expect(res.body.error.message).toContain('2.000.000');
     expect((await preview('GIAM10', 2_000_000)).status).toBe(200); // đúng mức tối thiểu thì được
   });
@@ -438,11 +456,13 @@ describe('POST /api/coupons/preview (US-25)', () => {
   });
 
   it.each([
-    ['thiếu mã', { subtotal: 1000 }],
-    ['mã sai định dạng', { code: 'a b', subtotal: 1000 }],
-    ['tiền hàng âm', { code: 'GIAM10', subtotal: -1 }],
-    ['tiền hàng là chuỗi', { code: 'GIAM10', subtotal: '1000' }],
-    ['tiền hàng lẻ', { code: 'GIAM10', subtotal: 10.5 }],
+    ['thiếu mã', { items: [{ productId: 1, quantity: 1 }] }],
+    ['mã sai định dạng', { code: 'a b', items: [{ productId: 1, quantity: 1 }] }],
+    ['thiếu giỏ hàng', { code: 'GIAM10' }],
+    ['giỏ hàng trống', { code: 'GIAM10', items: [] }],
+    ['số lượng bằng 0', { code: 'GIAM10', items: [{ productId: 1, quantity: 0 }] }],
+    ['mã sản phẩm là chuỗi', { code: 'GIAM10', items: [{ productId: '1', quantity: 1 }] }],
+    ['gửi tiền hàng thay vì giỏ', { code: 'GIAM10', subtotal: 1000 }],
   ])('từ chối dữ liệu sai: %s', async (_label, payload) => {
     const res = await request(app).post('/api/coupons/preview').send(payload);
     expect(res.status).toBe(400);
@@ -829,5 +849,434 @@ describe('Ràng buộc của cơ sở dữ liệu (chốt chặn cuối)', () =>
         },
       }),
     ).rejects.toThrow();
+  });
+});
+
+// ---------------------------------------------------------------------------
+// Điều kiện phụ: điểm thành viên tối thiểu và phạm vi áp dụng (BR-14)
+// ---------------------------------------------------------------------------
+// Hai nhóm hàng để thử phạm vi: điện thoại (hãng A) và phụ kiện (hãng B)
+const makeShelf = async () => {
+  const phones = await prisma.category.create({
+    data: { name: 'Điện thoại X', slug: 'dien-thoai-x' },
+  });
+  const accessories = await prisma.category.create({
+    data: { name: 'Phụ kiện X', slug: 'phu-kien-x' },
+  });
+  const brandA = await prisma.brand.create({ data: { name: 'Hãng A X', slug: 'hang-a-x' } });
+  const brandB = await prisma.brand.create({ data: { name: 'Hãng B X', slug: 'hang-b-x' } });
+  const phone = await makeProduct({ price: 10_000_000, categoryId: phones.id, brandId: brandA.id });
+  const charger = await makeProduct({
+    price: 500_000,
+    categoryId: accessories.id,
+    brandId: brandB.id,
+  });
+  const cable = await makeProduct({
+    price: 200_000,
+    categoryId: accessories.id,
+    brandId: brandA.id,
+  });
+  return { phones, accessories, brandA, brandB, phone, charger, cable };
+};
+const cartOf = (...products) => products.map((product) => ({ productId: product.id, quantity: 1 }));
+
+describe('Phạm vi áp dụng của mã (lib)', () => {
+  const line = (productId, categoryId, brandId, unitPrice, quantity = 1) => ({
+    productId,
+    categoryId,
+    brandId,
+    unitPrice,
+    quantity,
+  });
+  const lines = [
+    line(1, 10, 20, 1_000_000, 2),
+    line(2, 11, 21, 300_000),
+    line(3, 11, 20, 50_000, 3),
+  ];
+  const scopeOf = (scope) => ({ productIds: [], categoryIds: [], brandIds: [], ...scope });
+
+  it('không chọn phạm vi thì mọi dòng đều được áp dụng', () => {
+    expect(hasScope(scopeOf({}))).toBe(false);
+    expect(eligibleLines(scopeOf({}), lines)).toHaveLength(3);
+    expect(linesSubtotal(lines)).toBe(2_450_000);
+  });
+
+  it('phạm vi là HỢP của ba danh sách: khớp sản phẩm, hoặc danh mục, hoặc thương hiệu', () => {
+    const ids = (scope) => eligibleLines(scopeOf(scope), lines).map((l) => l.productId);
+    expect(ids({ productIds: [2] })).toEqual([2]);
+    expect(ids({ categoryIds: [11] })).toEqual([2, 3]);
+    expect(ids({ brandIds: [20] })).toEqual([1, 3]);
+    expect(ids({ productIds: [2], brandIds: [20] })).toEqual([1, 2, 3]);
+    expect(ids({ productIds: [1], categoryIds: [11] })).toEqual([1, 2, 3]);
+  });
+
+  it('danh sách còn id đã xóa thì chỉ không khớp ai, không biến thành áp dụng tất cả', () => {
+    expect(hasScope(scopeOf({ productIds: [999] }))).toBe(true);
+    expect(eligibleLines(scopeOf({ productIds: [999] }), lines)).toEqual([]);
+  });
+});
+
+describe('Admin tạo và sửa điều kiện phụ (US-24)', () => {
+  const create = (token, overrides) =>
+    request(app)
+      .post('/api/admin/coupons')
+      .set(auth(token))
+      .send({
+        code: 'PHAMVI',
+        type: 'PERCENT',
+        value: 10,
+        startsAt: new Date(Date.now() - HOUR).toISOString(),
+        endsAt: new Date(Date.now() + 24 * HOUR).toISOString(),
+        maxUses: 10,
+        ...overrides,
+      });
+
+  it('mặc định không có điều kiện phụ: điểm tối thiểu 0 và áp dụng cho mọi sản phẩm', async () => {
+    const admin = await signIn('admin@example.com', 'ADMIN');
+    const res = await create(admin.token);
+    expect(res.status).toBe(201);
+    expect(res.body).toMatchObject({
+      minPoints: 0,
+      scoped: false,
+      scope: { products: [], categories: [], brands: [] },
+    });
+  });
+
+  it('tạo mã có điểm tối thiểu và phạm vi: trả về tên để Admin đọc được', async () => {
+    const admin = await signIn('admin@example.com', 'ADMIN');
+    const shelf = await makeShelf();
+    const res = await create(admin.token, {
+      minPoints: 50,
+      productIds: [shelf.phone.id],
+      categoryIds: [shelf.accessories.id],
+      brandIds: [shelf.brandB.id],
+    });
+    expect(res.status).toBe(201);
+    expect(res.body).toMatchObject({ minPoints: 50, scoped: true });
+    expect(res.body.scope.products).toEqual([{ id: shelf.phone.id, name: shelf.phone.name }]);
+    expect(res.body.scope.categories).toEqual([{ id: shelf.accessories.id, name: 'Phụ kiện X' }]);
+    expect(res.body.scope.brands).toEqual([{ id: shelf.brandB.id, name: 'Hãng B X' }]);
+    const row = await couponRow('PHAMVI');
+    expect(row).toMatchObject({ minPoints: 50, productIds: [shelf.phone.id] });
+  });
+
+  it('bỏ trùng id trong danh sách', async () => {
+    const admin = await signIn('admin@example.com', 'ADMIN');
+    const shelf = await makeShelf();
+    const res = await create(admin.token, {
+      productIds: [shelf.phone.id, shelf.phone.id, shelf.charger.id, shelf.phone.id],
+    });
+    expect(res.status).toBe(201);
+    expect(res.body.scope.products.map((p) => p.id)).toEqual([shelf.phone.id, shelf.charger.id]);
+  });
+
+  it.each([
+    ['sản phẩm không tồn tại', { productIds: [987654] }, 'productIds'],
+    ['danh mục không tồn tại', { categoryIds: [987654] }, 'categoryIds'],
+    ['thương hiệu không tồn tại', { brandIds: [987654] }, 'brandIds'],
+  ])('từ chối khi %s, chỉ rõ trường lỗi', async (_label, overrides, field) => {
+    const admin = await signIn('admin@example.com', 'ADMIN');
+    const res = await create(admin.token, overrides);
+    expect(res.status).toBe(400);
+    expect(res.body.error.details[field]).toBeDefined();
+    expect(await prisma.coupon.count()).toBe(0);
+  });
+
+  it.each([
+    ['điểm tối thiểu âm', { minPoints: -1 }],
+    ['điểm tối thiểu lẻ', { minPoints: 1.5 }],
+    ['điểm tối thiểu là chuỗi', { minPoints: '50' }],
+    ['id sản phẩm âm', { productIds: [-1] }],
+    ['id sản phẩm là chuỗi', { productIds: ['1'] }],
+    ['danh sách không phải mảng', { categoryIds: 3 }],
+    ['quá 50 thương hiệu', { brandIds: Array.from({ length: 51 }, (_, i) => i + 1) }],
+  ])('từ chối dữ liệu sai: %s', async (_label, overrides) => {
+    const admin = await signIn('admin@example.com', 'ADMIN');
+    const res = await create(admin.token, overrides);
+    expect(res.status).toBe(400);
+    expect(res.body.error.code).toBe('VALIDATION_ERROR');
+  });
+
+  it('sửa phạm vi: thay cả danh sách; gửi mảng rỗng thì bỏ phạm vi (áp dụng mọi sản phẩm)', async () => {
+    const admin = await signIn('admin@example.com', 'ADMIN');
+    const shelf = await makeShelf();
+    const coupon = await makeCoupon({ productIds: [shelf.phone.id] });
+    const patch = (data) =>
+      request(app).patch(`/api/admin/coupons/${coupon.id}`).set(auth(admin.token)).send(data);
+
+    const changed = await patch({ productIds: [shelf.charger.id], minPoints: 30 });
+    expect(changed.status).toBe(200);
+    expect(changed.body.scope.products.map((p) => p.id)).toEqual([shelf.charger.id]);
+    expect(changed.body.minPoints).toBe(30);
+
+    const cleared = await patch({ productIds: [] });
+    expect(cleared.body).toMatchObject({ scoped: false, minPoints: 30 }); // chỉ đổi danh sách được gửi
+    expect((await patch({ categoryIds: [987654] })).status).toBe(400);
+  });
+
+  it('danh sách mã hiện tên phạm vi; sản phẩm đã bị xóa thì tên là null nhưng vẫn tính là có phạm vi', async () => {
+    const admin = await signIn('admin@example.com', 'ADMIN');
+    const shelf = await makeShelf();
+    await makeCoupon({ productIds: [shelf.cable.id], categoryIds: [shelf.phones.id] });
+    await prisma.product.delete({ where: { id: shelf.cable.id } });
+
+    const res = await request(app).get('/api/admin/coupons').set(auth(admin.token));
+    const [item] = res.body.items;
+    expect(item.scoped).toBe(true);
+    expect(item.scope.products).toEqual([{ id: shelf.cable.id, name: null }]);
+    expect(item.scope.categories).toEqual([{ id: shelf.phones.id, name: 'Điện thoại X' }]);
+  });
+
+  it('CSDL từ chối điểm âm và danh sách quá 50 phần tử (chốt chặn cuối)', async () => {
+    await expect(makeCoupon({ code: 'DIEMAM', minPoints: -1 })).rejects.toThrow();
+    await expect(
+      makeCoupon({ code: 'QUA50', brandIds: Array.from({ length: 51 }, (_, i) => i + 1) }),
+    ).rejects.toThrow();
+  });
+});
+
+describe('Xem trước mã theo giỏ hàng, có phạm vi (US-25)', () => {
+  it('chỉ giảm trên các sản phẩm được áp dụng, không tính các món khác trong giỏ', async () => {
+    const shelf = await makeShelf();
+    await makeCoupon({ categoryIds: [shelf.accessories.id] });
+
+    const res = await previewItems('GIAM10', cartOf(shelf.phone, shelf.charger, shelf.cable));
+    expect(res.status).toBe(200);
+    // Chỉ phụ kiện (500.000 + 200.000) được giảm 10%, điện thoại 10 triệu thì không
+    expect(res.body).toMatchObject({ scoped: true, eligibleSubtotal: 700_000, discount: 70_000 });
+  });
+
+  it('áp dụng theo sản phẩm, theo thương hiệu và theo hợp của cả ba', async () => {
+    const shelf = await makeShelf();
+    const cart = cartOf(shelf.phone, shelf.charger, shelf.cable);
+
+    await makeCoupon({ code: 'THEOSP', productIds: [shelf.phone.id] });
+    expect((await previewItems('THEOSP', cart)).body.eligibleSubtotal).toBe(10_000_000);
+
+    await makeCoupon({ code: 'THEOHANG', brandIds: [shelf.brandA.id] });
+    expect((await previewItems('THEOHANG', cart)).body.eligibleSubtotal).toBe(10_200_000);
+
+    await makeCoupon({
+      code: 'HOPBA',
+      productIds: [shelf.charger.id],
+      brandIds: [shelf.brandA.id],
+    });
+    expect((await previewItems('HOPBA', cart)).body.eligibleSubtotal).toBe(10_700_000);
+  });
+
+  it('số lượng được nhân vào tiền hàng của dòng được áp dụng', async () => {
+    const shelf = await makeShelf();
+    await makeCoupon({ productIds: [shelf.charger.id] });
+    const res = await previewItems('GIAM10', [
+      { productId: shelf.charger.id, quantity: 3 },
+      { productId: shelf.phone.id, quantity: 1 },
+    ]);
+    expect(res.body).toMatchObject({ eligibleSubtotal: 1_500_000, discount: 150_000 });
+  });
+
+  it('giỏ không có sản phẩm nào được áp dụng: báo COUPON_NOT_APPLICABLE', async () => {
+    const shelf = await makeShelf();
+    await makeCoupon({ categoryIds: [shelf.accessories.id] });
+    const res = await previewItems('GIAM10', cartOf(shelf.phone));
+    expect(res.status).toBe(400);
+    expect(res.body.error.code).toBe('COUPON_NOT_APPLICABLE');
+  });
+
+  it('phạm vi trỏ vào id đã bị xóa thì không áp dụng cho ai, không thành "áp dụng tất cả"', async () => {
+    const shelf = await makeShelf();
+    await makeCoupon({ productIds: [987654] });
+    const res = await previewItems('GIAM10', cartOf(shelf.phone, shelf.charger));
+    expect(res.status).toBe(400);
+    expect(res.body.error.code).toBe('COUPON_NOT_APPLICABLE');
+  });
+
+  it('đơn tối thiểu tính trên phần được áp dụng: giỏ lớn nhưng phần phụ kiện chưa đủ thì báo thiếu', async () => {
+    const shelf = await makeShelf();
+    await makeCoupon({ categoryIds: [shelf.accessories.id], minOrder: 1_000_000 });
+    const res = await previewItems('GIAM10', cartOf(shelf.phone, shelf.charger, shelf.cable));
+    expect(res.status).toBe(400);
+    expect(res.body.error.code).toBe('COUPON_MIN_ORDER');
+    expect(res.body.error.details).toEqual({ minOrder: 1_000_000, scoped: true });
+    expect(res.body.error.message).toContain('sản phẩm được áp dụng');
+
+    // Thêm phụ kiện cho đủ 1.000.000 thì dùng được
+    const enough = await previewItems('GIAM10', [
+      { productId: shelf.charger.id, quantity: 2 },
+      { productId: shelf.phone.id, quantity: 1 },
+    ]);
+    expect(enough.status).toBe(200);
+  });
+
+  it('sản phẩm đã ẩn không tính vào giỏ xem trước', async () => {
+    const shelf = await makeShelf();
+    const hidden = await makeProduct({
+      price: 900_000,
+      isActive: false,
+      categoryId: shelf.accessories.id,
+    });
+    await makeCoupon({ categoryIds: [shelf.accessories.id] });
+    const res = await previewItems('GIAM10', cartOf(shelf.charger, hidden));
+    expect(res.body.eligibleSubtotal).toBe(500_000);
+  });
+});
+
+describe('Điểm thành viên tối thiểu (US-25)', () => {
+  it('khách chưa đăng nhập bị từ chối và được mời đăng nhập', async () => {
+    await makeCoupon({ minPoints: 10 });
+    const res = await preview('GIAM10', 2_000_000);
+    expect(res.status).toBe(400);
+    expect(res.body.error.code).toBe('COUPON_MIN_POINTS');
+    expect(res.body.error.details).toEqual({ minPoints: 10, points: null });
+    expect(res.body.error.message).toContain('đăng nhập');
+  });
+
+  it('thành viên chưa đủ điểm được báo số điểm hiện có và số điểm cần', async () => {
+    const buyer = await signIn();
+    await prisma.user.update({ where: { id: buyer.user.id }, data: { points: 7 } });
+    await makeCoupon({ minPoints: 10 });
+    const res = await preview('GIAM10', 2_000_000, buyer.token);
+    expect(res.status).toBe(400);
+    expect(res.body.error.code).toBe('COUPON_MIN_POINTS');
+    expect(res.body.error.details).toEqual({ minPoints: 10, points: 7 });
+    expect(res.body.error.message).toContain('10');
+    expect(res.body.error.message).toContain('7');
+  });
+
+  it('đủ điểm (kể cả đúng bằng mức tối thiểu) thì dùng được', async () => {
+    const buyer = await signIn();
+    await prisma.user.update({ where: { id: buyer.user.id }, data: { points: 10 } });
+    await makeCoupon({ minPoints: 10 });
+    const res = await preview('GIAM10', 2_000_000, buyer.token);
+    expect(res.status).toBe(200);
+    expect(res.body).toMatchObject({ minPoints: 10, discount: 200_000 });
+  });
+
+  it('mã không yêu cầu điểm thì khách dùng được như cũ', async () => {
+    await makeCoupon({ minPoints: 0 });
+    expect((await preview('GIAM10', 1_000_000)).status).toBe(200);
+  });
+
+  it('token sai thì 401 (để Client làm mới phiên), không âm thầm coi là khách', async () => {
+    await makeCoupon({ minPoints: 10 });
+    const res = await preview('GIAM10', 1_000_000, 'token-sai');
+    expect(res.status).toBe(401);
+  });
+
+  it('lý do "hết hạn" được báo trước lý do thiếu điểm', async () => {
+    await makeCoupon({
+      minPoints: 10,
+      startsAt: new Date(Date.now() - 2 * HOUR),
+      endsAt: new Date(Date.now() - HOUR),
+    });
+    const res = await preview('GIAM10', 1_000_000);
+    expect(res.body.error.code).toBe('COUPON_EXPIRED');
+  });
+});
+
+describe('Đặt hàng với mã có điều kiện phụ (BR-14)', () => {
+  it('thành viên: chỉ giảm trên phần được áp dụng, tổng và dòng đơn đúng', async () => {
+    const buyer = await signIn();
+    const shelf = await makeShelf();
+    await fillCart(buyer.user.id, shelf.phone);
+    await fillCart(buyer.user.id, shelf.charger, 2);
+    await makeCoupon({ categoryIds: [shelf.accessories.id] });
+
+    const res = await memberOrder(buyer, 'GIAM10');
+    expect(res.status).toBe(201);
+    // Tiền hàng 11.000.000 (10 triệu + 2 x 500.000), giảm 10% của 1.000.000 phụ kiện = 100.000
+    expect(res.body).toMatchObject({
+      subtotal: 11_000_000,
+      discount: 100_000,
+      couponCode: 'GIAM10',
+      shippingFee: 0,
+      total: 10_900_000,
+    });
+    expect(res.body.items).toHaveLength(2);
+    expect((await couponRow()).usedCount).toBe(1);
+  });
+
+  it('không có món nào được áp dụng: từ chối, không tạo đơn, không trừ kho, không tốn lượt', async () => {
+    const buyer = await signIn();
+    const shelf = await makeShelf();
+    await fillCart(buyer.user.id, shelf.phone);
+    await makeCoupon({ categoryIds: [shelf.accessories.id] });
+
+    const res = await memberOrder(buyer, 'GIAM10');
+    expect(res.status).toBe(400);
+    expect(res.body.error.code).toBe('COUPON_NOT_APPLICABLE');
+    expect(await prisma.order.count()).toBe(0);
+    expect(await stockOf(shelf.phone)).toBe(10);
+    expect((await couponRow()).usedCount).toBe(0);
+  });
+
+  it('đơn tối thiểu của mã có phạm vi tính trên phần được áp dụng khi đặt hàng', async () => {
+    const buyer = await signIn();
+    const shelf = await makeShelf();
+    await fillCart(buyer.user.id, shelf.phone);
+    await fillCart(buyer.user.id, shelf.charger);
+    await makeCoupon({ categoryIds: [shelf.accessories.id], minOrder: 1_000_000 });
+
+    const res = await memberOrder(buyer, 'GIAM10');
+    expect(res.status).toBe(400);
+    expect(res.body.error.code).toBe('COUPON_MIN_ORDER');
+    expect(await prisma.order.count()).toBe(0);
+  });
+
+  it('thiếu điểm thành viên: từ chối và hoàn tác cả kho; đủ điểm thì đặt được', async () => {
+    const buyer = await signIn();
+    const product = await makeProduct({ price: 1_000_000, stock: 5 });
+    await fillCart(buyer.user.id, product);
+    await prisma.user.update({ where: { id: buyer.user.id }, data: { points: 4 } });
+    await makeCoupon({ minPoints: 5 });
+
+    const denied = await memberOrder(buyer, 'GIAM10');
+    expect(denied.status).toBe(400);
+    expect(denied.body.error.code).toBe('COUPON_MIN_POINTS');
+    expect(await stockOf(product)).toBe(5);
+    expect((await couponRow()).usedCount).toBe(0);
+
+    await prisma.user.update({ where: { id: buyer.user.id }, data: { points: 5 } });
+    const ok = await memberOrder(buyer, 'GIAM10');
+    expect(ok.status).toBe(201);
+    expect(ok.body.discount).toBe(100_000);
+  });
+
+  it('khách vãng lai không dùng được mã có điểm tối thiểu, nhưng dùng được mã có phạm vi', async () => {
+    const shelf = await makeShelf();
+    await makeCoupon({ code: 'CHODIEM', minPoints: 1 });
+    await makeCoupon({ code: 'CHOPHUKIEN', categoryIds: [shelf.accessories.id] });
+
+    const items = [
+      { productId: shelf.phone.id, quantity: 1 },
+      { productId: shelf.charger.id, quantity: 1 },
+    ];
+    const denied = await guestOrder(items, { couponCode: 'CHODIEM' });
+    expect(denied.status).toBe(400);
+    expect(denied.body.error.code).toBe('COUPON_MIN_POINTS');
+    expect(await stockOf(shelf.phone)).toBe(10);
+
+    const ok = await guestOrder(items, { couponCode: 'CHOPHUKIEN' });
+    expect(ok.status).toBe(201);
+    expect(ok.body).toMatchObject({ discount: 50_000, couponCode: 'CHOPHUKIEN' });
+  });
+
+  it('xem trước và đặt hàng cho cùng một số tiền giảm (hai nơi dùng chung một hàm kiểm tra)', async () => {
+    const buyer = await signIn();
+    const shelf = await makeShelf();
+    await fillCart(buyer.user.id, shelf.phone);
+    await fillCart(buyer.user.id, shelf.cable, 3);
+    await makeCoupon({ brandIds: [shelf.brandA.id], type: 'FIXED', value: 1_500_000 });
+
+    const quote = await previewItems(
+      'GIAM10',
+      [
+        { productId: shelf.phone.id, quantity: 1 },
+        { productId: shelf.cable.id, quantity: 3 },
+      ],
+      buyer.token,
+    );
+    const order = await memberOrder(buyer, 'GIAM10');
+    expect(order.body.discount).toBe(quote.body.discount);
+    expect(quote.body.discount).toBe(1_500_000);
   });
 });
