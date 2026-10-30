@@ -1,0 +1,65 @@
+# @feature [F00] Nền tảng - Chạy cả hệ thống như môi trường staging bằng Docker (rubric TC2.6).
+# Dùng:  JWT_ACCESS_SECRET=<chuỗi ngẫu nhiên dài> POSTGRES_PASSWORD=<mật khẩu> docker compose -f docker-compose.staging.yml up -d --build
+# Nạp dữ liệu mẫu lần đầu:  docker compose -f docker-compose.staging.yml exec -w /app/backend backend npx prisma db seed
+# (seed tạo tài khoản mẫu có mật khẩu công khai trong README: trên staging mở ra internet hãy đổi mật khẩu Admin ngay sau khi nạp)
+# Client ở cổng 8080, Admin ở cổng 8081 (đổi bằng CLIENT_PORT, ADMIN_PORT). Backend chỉ truy cập được qua nginx của hai ứng dụng.
+services:
+  postgres:
+    image: postgres:16-alpine
+    restart: unless-stopped
+    environment:
+      POSTGRES_USER: electronics
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:?Hãy đặt POSTGRES_PASSWORD}
+      POSTGRES_DB: electronics_retail
+    volumes:
+      - staging-pgdata:/var/lib/postgresql/data
+    healthcheck:
+      test: ['CMD-SHELL', 'pg_isready -U electronics -d electronics_retail']
+      interval: 5s
+      timeout: 5s
+      retries: 10
+
+  backend:
+    build:
+      context: .
+      dockerfile: backend/Dockerfile
+    restart: unless-stopped
+    depends_on:
+      postgres:
+        condition: service_healthy
+    environment:
+      DATABASE_URL: postgresql://electronics:${POSTGRES_PASSWORD}@postgres:5432/electronics_retail?schema=public
+      JWT_ACCESS_SECRET: ${JWT_ACCESS_SECRET:?Hãy đặt JWT_ACCESS_SECRET (ít nhất 32 ký tự)}
+      # Client và Admin gọi API qua nginx cùng origin nên CORS gần như không dùng tới; chỉ liệt kê đúng hai địa chỉ này
+      CORS_ORIGINS: ${CORS_ORIGINS:-http://localhost:8080,http://localhost:8081}
+      TRUST_PROXY: '1'
+    volumes:
+      - staging-uploads:/data/uploads
+
+  client:
+    build:
+      context: .
+      dockerfile: frontend.Dockerfile
+      args:
+        APP: client
+    restart: unless-stopped
+    depends_on:
+      - backend
+    ports:
+      - '${CLIENT_PORT:-8080}:80'
+
+  admin:
+    build:
+      context: .
+      dockerfile: frontend.Dockerfile
+      args:
+        APP: admin
+    restart: unless-stopped
+    depends_on:
+      - backend
+    ports:
+      - '${ADMIN_PORT:-8081}:80'
+
+volumes:
+  staging-pgdata:
+  staging-uploads:

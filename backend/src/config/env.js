@@ -22,6 +22,9 @@ const envSchema = z.object({
   ORDER_LOOKUP_RATE_LIMIT: z.coerce.number().int().positive().default(20),
   // [F09] Giới hạn số lần xem trước mã giảm giá / 15 phút / IP (chống dò mã)
   COUPON_RATE_LIMIT: z.coerce.number().int().positive().default(30),
+  // [F00] Số lớp proxy (nginx...) đứng trước backend. Phải đặt đúng khi chạy sau proxy để giới hạn tốc độ tính theo IP khách
+  // chứ không theo IP của proxy (nếu không, mọi khách dùng chung một hạn mức); 0 = chạy trực tiếp, không proxy
+  TRUST_PROXY: z.coerce.number().int().min(0).default(0),
   // [F03] Thư mục lưu ảnh tải lên (mặc định backend/uploads). Có thể đặt đường dẫn tuyệt đối
   UPLOAD_DIR: z.string().optional(),
 });

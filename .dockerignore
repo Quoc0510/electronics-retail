@@ -1,0 +1,14 @@
+# Giữ ngữ cảnh build Docker nhỏ và không đưa bí mật hay dữ liệu cục bộ vào image
+**/node_modules
+**/dist
+**/coverage
+.git
+.github
+.claude
+**/.env
+**/.env.*
+!**/.env.example
+backend/uploads
+docs
+*.docx
+*.log
