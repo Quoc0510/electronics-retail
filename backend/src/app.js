@@ -14,6 +14,9 @@ import { notFound, errorHandler } from './middlewares/errorHandler.js';
 
 export const app = express();
 
+// Chạy sau nginx (Docker/staging) thì tin header X-Forwarded-For của đúng số lớp proxy để lấy IP thật của khách
+app.set('trust proxy', env.TRUST_PROXY);
+
 // Thêm các HTTP header bảo mật (chống clickjacking, sniffing...)
 app.use(helmet());
 

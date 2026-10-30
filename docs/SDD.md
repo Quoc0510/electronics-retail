@@ -321,7 +321,7 @@ stateDiagram-v2
 
 ## 7. Sơ đồ triển khai (Deployment)
 
-Nền tảng cụ thể chưa chốt (ưu tiên gói miễn phí); sơ đồ dưới là phương án dự kiến và sẽ cập nhật khi deploy.
+Đóng gói và chạy thử bằng Docker đã làm xong; nơi đặt staging công khai chưa chốt (ưu tiên gói miễn phí), sơ đồ dưới là phương án dự kiến và sẽ cập nhật khi deploy.
 
 ```mermaid
 flowchart LR
@@ -337,6 +337,14 @@ flowchart LR
 
 Môi trường local: `docker-compose.yml` chạy PostgreSQL; backend và hai frontend chạy bằng `npm run dev:*`.
 
+Đóng gói (đã chạy thử đủ cả hệ thống):
+
+- `backend/Dockerfile` (build từ thư mục gốc vì dùng npm workspaces): chặng cài thư viện riêng để được cache, chạy bằng người dùng `node` (không phải root), ảnh tải lên ở volume `/data/uploads`, `HEALTHCHECK` gọi `/api/health`. Khi khởi động chạy `prisma migrate deploy` rồi mới nhận request; migration lỗi thì container dừng ngay.
+- `frontend.Dockerfile` + `nginx.conf.template`: một Dockerfile dùng cho cả Client và Admin (`--build-arg APP=client|admin`). nginx phục vụ file tĩnh, trả `index.html` cho mọi đường dẫn của React Router và chuyển `/api`, `/uploads` sang backend nên trình duyệt chỉ gặp một địa chỉ (không phụ thuộc CORS); file trong `/assets` có mã băm nên cache một năm, `index.html` không cache.
+- `docker-compose.staging.yml`: PostgreSQL, backend, Client (cổng 8080), Admin (cổng 8081). Bí mật (`JWT_ACCESS_SECRET`, `POSTGRES_PASSWORD`) bắt buộc truyền qua biến môi trường, thiếu thì compose từ chối chạy. Backend chạy với `TRUST_PROXY=1` để giới hạn tốc độ tính theo IP thật của khách thay vì IP của nginx.
+
+Pipeline CI (`.github/workflows/ci.yml`) gồm 6 chặng: lint và format; test kèm coverage (PostgreSQL thật); quét bí mật bằng gitleaks trên toàn bộ lịch sử (`.gitleaks.toml` chỉ loại trừ các giá trị giả đã kiểm tra); `npm audit` (chặn mức Critical); build frontend; đóng gói Docker rồi chạy thử cả hệ thống qua nginx (trang Client, trang Admin, `/api/health/ready`, `/api/products`). Chặng triển khai tự động lên staging sẽ thêm khi chọn xong nơi đặt.
+
 ## 8. Nhật ký thay đổi thiết kế
 
 | Ngày       | Thay đổi                                                                                                                                                                                                                                                                                                                           | Lý do                                                                                                                   |
@@ -348,6 +356,7 @@ Môi trường local: `docker-compose.yml` chạy PostgreSQL; backend và hai fr
 | 29/10/2026 | Đánh giá và yêu thích (F08): bảng `reviews`, `wishlist_items` (migration `20261029000000_reviews_wishlist`); `GET/POST /api/products/:slug/reviews`, `GET/PATCH .../reviews/mine`, `GET /api/admin/reviews`, `PATCH /api/admin/reviews/:id/visibility`, `GET/PUT/DELETE /api/wishlist`; API sản phẩm thêm trường `rating`          | Hoàn thành chức năng F08 (US-21, US-22, US-23)                                                                          |
 | 29/10/2026 | Đổi cách tính điểm thành viên (BR-15): cộng dồn theo tổng tiền hàng đã mua, 1.000.000 đ = 1 điểm; thêm `users.total_spent` (migration `20261029010000_points_cumulative` tính lại điểm của dữ liệu cũ); `GET /api/users/me` thêm `totalSpent`                                                                                      | Yêu cầu của nhóm: điểm theo tổng giá trị mọi đơn hàng, không theo từng đơn                                              |
 | 30/10/2026 | Mã giảm giá (F09): bảng `coupons`, `orders.discount`, `orders.coupon_id`, `orders.coupon_code` (migration `20261030000000_coupons`); `POST /api/coupons/preview`, `GET/POST/PATCH /api/admin/coupons`; `POST /api/orders` và `/api/orders/guest` nhận `couponCode`; phí vận chuyển và điểm thành viên tính trên tiền hàng sau giảm | Hoàn thành chức năng bổ sung F09 (US-24, US-25)                                                                         |
+| 30/10/2026 | Đóng gói Docker (`backend/Dockerfile`, `frontend.Dockerfile`, `docker-compose.staging.yml`), CI mở rộng lên 6 chặng, backend nhận `TRUST_PROXY`                                                                                                                                                                                    | Hoàn thiện phần triển khai và vận hành (TC2.6)                                                                          |
 | 28/10/2026 | `addresses.district` cho phép rỗng; địa chỉ ghép bỏ phần trống                                                                                                                                                                                                                                                                     | Nhiều địa phương đã bỏ cấp quận/huyện nên không thể bắt khách nhập                                                      |
 
 ## 9. Danh sách API đã triển khai

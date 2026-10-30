@@ -1,0 +1,36 @@
+# @feature [F00] Nền tảng - Cấu hình nginx cho image Client/Admin (xem frontend.Dockerfile).
+# Chỉ biến BACKEND_URL được thay khi khởi động; các biến của nginx như $uri giữ nguyên.
+server {
+    listen 80;
+    server_name _;
+    root /usr/share/nginx/html;
+    index index.html;
+
+    # Giảm dung lượng tải về
+    gzip on;
+    gzip_types text/css application/javascript application/json image/svg+xml;
+
+    # Dữ liệu và ảnh sản phẩm do backend phục vụ; giữ nguyên IP khách để giới hạn tốc độ tính đúng người
+    location /api/ {
+        proxy_pass ${BACKEND_URL};
+        proxy_set_header Host $host;
+        proxy_set_header X-Real-IP $remote_addr;
+        proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
+        proxy_set_header X-Forwarded-Proto $scheme;
+        client_max_body_size 12m;
+    }
+    location /uploads/ {
+        proxy_pass ${BACKEND_URL};
+    }
+
+    # File build có mã băm trong tên nên cache được lâu; index.html thì không
+    location /assets/ {
+        expires 1y;
+        add_header Cache-Control "public, immutable";
+        try_files $uri =404;
+    }
+    location / {
+        add_header Cache-Control "no-cache";
+        try_files $uri /index.html;
+    }
+}

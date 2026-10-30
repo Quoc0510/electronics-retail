@@ -1,0 +1,20 @@
+# @feature [F00] Nền tảng - Cấu hình quét bí mật gitleaks (chặng "secrets" trong CI, KPI-07).
+# Dùng bộ luật mặc định, chỉ loại trừ các chỗ ĐÃ KIỂM TRA là giá trị giả, không phải bí mật thật:
+#  - backend/tests: biến tên `token` gán chuỗi cố định để thử API;
+#  - backend/.env.example: khóa mẫu "doi-gia-tri-nay-..." (production tự từ chối khóa này, xem backend/src/config/env.js);
+#  - backend/vitest.config.js: khóa JWT chỉ dùng khi chạy test;
+#  - .github/workflows/ci.yml: mật khẩu và khóa chỉ dùng để chạy thử trong pipeline.
+# Bí mật thật nằm trong backend/.env (không commit, đã có trong .gitignore).
+title = "TechStore"
+
+[extend]
+useDefault = true
+
+[allowlist]
+description = "Giá trị giả đã kiểm tra"
+paths = [
+  '''backend/tests/.*''',
+  '''backend/\.env\.example''',
+  '''backend/vitest\.config\.js''',
+  '''\.github/workflows/ci\.yml''',
+]
