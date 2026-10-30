@@ -5,3 +5,7 @@ coverage
 package-lock.json
 *.docx
 backend/prisma/migrations
+
+# [F15] Kết quả chạy E2E (Playwright)
+playwright-report
+test-results

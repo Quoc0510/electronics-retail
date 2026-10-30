@@ -3,7 +3,7 @@
 #  - backend/tests: biến tên `token` gán chuỗi cố định để thử API;
 #  - backend/.env.example: khóa mẫu "doi-gia-tri-nay-..." (production tự từ chối khóa này, xem backend/src/config/env.js);
 #  - backend/vitest.config.js: khóa JWT chỉ dùng khi chạy test;
-#  - .github/workflows/ci.yml: mật khẩu và khóa chỉ dùng để chạy thử trong pipeline.
+#  - .github/workflows/ci.yml, e2e/stack.mjs: mật khẩu và khóa chỉ dùng để chạy thử trong pipeline và trong hệ thống kiểm thử E2E tạm.
 # Bí mật thật nằm trong backend/.env (không commit, đã có trong .gitignore).
 title = "TechStore"
 
@@ -17,4 +17,5 @@ paths = [
   '''backend/\.env\.example''',
   '''backend/vitest\.config\.js''',
   '''\.github/workflows/ci\.yml''',
+  '''e2e/stack\.mjs''',
 ]

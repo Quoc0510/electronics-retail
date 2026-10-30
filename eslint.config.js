@@ -11,10 +11,27 @@ import prettier from 'eslint-config-prettier';
 export default [
   // Bỏ qua thư mục sinh ra tự động
   {
-    ignores: ['**/node_modules/**', '**/dist/**', '**/coverage/**', 'backend/prisma/migrations/**'],
+    ignores: [
+      '**/node_modules/**',
+      '**/dist/**',
+      '**/coverage/**',
+      '**/playwright-report/**',
+      '**/test-results/**',
+      'backend/prisma/migrations/**',
+    ],
   },
 
   js.configs.recommended,
+
+  // [F15] Kiểm thử E2E (Playwright): chạy trên Node.js, có đoạn chạy trong trình duyệt (page.evaluate)
+  {
+    files: ['e2e/**/*.{js,mjs}'],
+    languageOptions: {
+      ecmaVersion: 'latest',
+      sourceType: 'module',
+      globals: { ...globals.node, ...globals.browser },
+    },
+  },
 
   // Backend: chạy trên Node.js
   {

@@ -15,6 +15,8 @@ const envSchema = z.object({
   CORS_ORIGINS: z.string().default('http://localhost:5173,http://localhost:5174'),
   // [F01] Khóa ký JWT: đủ dài để không bị dò (NFR-03)
   JWT_ACCESS_SECRET: z.string().min(32, 'JWT_ACCESS_SECRET phải dài ít nhất 32 ký tự'),
+  // [F00] Giới hạn tổng số request tới /api / 15 phút / IP (mặc định 300); hệ thống kiểm thử E2E nâng lên vì cả bộ kịch bản chạy từ một IP
+  API_RATE_LIMIT: z.coerce.number().int().positive().default(300),
   // [F01] Giới hạn số lần gọi API đăng nhập / 15 phút / IP
   LOGIN_RATE_LIMIT: z.coerce.number().int().positive().default(10),
   // [F13] Giới hạn số lần đặt hàng của khách vãng lai và số lần tra cứu/hủy đơn bằng mã đơn + số điện thoại / 15 phút / IP
