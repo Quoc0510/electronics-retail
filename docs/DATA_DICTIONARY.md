@@ -4,12 +4,13 @@ Phục vụ rubric TC2.1. Nguồn sự thật là [schema.prisma](../backend/pri
 
 ## Kiểu liệt kê (enum)
 
-| Enum             | Giá trị                                            | Ý nghĩa                                |
-| ---------------- | -------------------------------------------------- | -------------------------------------- |
-| `role`           | CUSTOMER, ADMIN                                    | Vai trò người dùng                     |
-| `order_status`   | PENDING, CONFIRMED, SHIPPING, COMPLETED, CANCELLED | Trạng thái đơn hàng (BR-06)            |
-| `payment_method` | COD                                                | Phương thức thanh toán (sẽ thêm ở F11) |
-| `payment_status` | UNPAID, PAID                                       | Trạng thái thanh toán (BR-08)          |
+| Enum             | Giá trị                                            | Ý nghĩa                                        |
+| ---------------- | -------------------------------------------------- | ---------------------------------------------- |
+| `role`           | CUSTOMER, ADMIN                                    | Vai trò người dùng                             |
+| `order_status`   | PENDING, CONFIRMED, SHIPPING, COMPLETED, CANCELLED | Trạng thái đơn hàng (BR-06)                    |
+| `payment_method` | COD                                                | Phương thức thanh toán (sẽ thêm ở F11)         |
+| `payment_status` | UNPAID, PAID                                       | Trạng thái thanh toán (BR-08)                  |
+| `coupon_type`    | PERCENT, FIXED                                     | Loại mã giảm giá: phần trăm hoặc số tiền (F09) |
 
 ## users - Người dùng (F01)
 
@@ -85,17 +86,19 @@ Phục vụ rubric TC2.1. Nguồn sự thật là [schema.prisma](../backend/pri
 
 ## orders - Đơn hàng (F06, F07, F13)
 
-| Cột                                     | Kiểu         | Ràng buộc          | Mô tả                                                                                       |
-| --------------------------------------- | ------------ | ------------------ | ------------------------------------------------------------------------------------------- |
-| code                                    | text         | duy nhất           | Mã đơn `TSyymmdd-xxxx` (BR-12)                                                              |
-| user_id                                 | int          | tùy chọn, FK users | Người đặt; rỗng = đơn của khách không đăng nhập (F13, BR-11)                                |
-| status                                  | order_status | mặc định PENDING   | Trạng thái                                                                                  |
-| payment_method, payment_status          | enum         | COD, UNPAID        | Thanh toán                                                                                  |
-| subtotal, shipping_fee, total           | int          | >= 0               | Tiền hàng, phí vận chuyển (BR-05), tổng (VND)                                               |
-| recipient_name, phone, shipping_address | text         | bắt buộc           | Bản sao thông tin giao hàng (BR-04)                                                         |
-| note, cancel_reason                     | text         | tùy chọn           | Ghi chú của khách, lý do hủy                                                                |
-| points_earned                           | int          | >= 0, mặc định 0   | Điểm đã cộng cho thành viên khi đơn hoàn thành (BR-15)                                      |
-| idempotency_key                         | text         | duy nhất, tùy chọn | Mã do trình duyệt sinh cho mỗi lần đặt của khách không đăng nhập, chống tạo đơn trùng (F13) |
+| Cột                                     | Kiểu         | Ràng buộc            | Mô tả                                                                                                          |
+| --------------------------------------- | ------------ | -------------------- | -------------------------------------------------------------------------------------------------------------- |
+| code                                    | text         | duy nhất             | Mã đơn `TSyymmdd-xxxx` (BR-12)                                                                                 |
+| user_id                                 | int          | tùy chọn, FK users   | Người đặt; rỗng = đơn của khách không đăng nhập (F13, BR-11)                                                   |
+| status                                  | order_status | mặc định PENDING     | Trạng thái                                                                                                     |
+| payment_method, payment_status          | enum         | COD, UNPAID          | Thanh toán                                                                                                     |
+| subtotal, shipping_fee, total           | int          | >= 0                 | Tiền hàng, phí vận chuyển (BR-05), tổng (VND)                                                                  |
+| recipient_name, phone, shipping_address | text         | bắt buộc             | Bản sao thông tin giao hàng (BR-04)                                                                            |
+| note, cancel_reason                     | text         | tùy chọn             | Ghi chú của khách, lý do hủy                                                                                   |
+| discount                                | int          | 0 đến subtotal       | Số tiền được giảm bởi mã giảm giá, 0 nếu không dùng mã; tổng = subtotal - discount + shipping_fee (BR-14, F09) |
+| coupon_id, coupon_code                  | int, text    | tùy chọn, FK coupons | Mã giảm giá đã dùng và bản sao mã tại thời điểm đặt (BR-04, F09)                                               |
+| points_earned                           | int          | >= 0, mặc định 0     | Điểm đã cộng cho thành viên khi đơn hoàn thành (BR-15)                                                         |
+| idempotency_key                         | text         | duy nhất, tùy chọn   | Mã do trình duyệt sinh cho mỗi lần đặt của khách không đăng nhập, chống tạo đơn trùng (F13)                    |
 
 ## order_items - Dòng đơn hàng (F06, F07)
 
@@ -114,3 +117,17 @@ Phục vụ rubric TC2.1. Nguồn sự thật là [schema.prisma](../backend/pri
 | status        | order_status | bắt buộc           | Trạng thái được chuyển tới |
 | note          | text         | tùy chọn           | Ghi chú                    |
 | changed_by_id | int          | tùy chọn, FK users | Người thực hiện            |
+
+## coupons - Mã giảm giá (F09)
+
+| Cột        | Kiểu        | Ràng buộc                    | Mô tả                                           |
+| ---------- | ----------- | ---------------------------- | ----------------------------------------------- |
+| code       | text        | duy nhất, in hoa, 3-30 ký tự | Mã khách nhập (BR-14)                           |
+| type       | coupon_type | bắt buộc                     | PERCENT (giảm theo %) hoặc FIXED (giảm số tiền) |
+| value      | int         | > 0; PERCENT thì <= 100      | Số phần trăm hoặc số tiền (VND)                 |
+| min_order  | int         | >= 0, mặc định 0             | Tiền hàng tối thiểu để dùng mã                  |
+| starts_at  | timestamp   | bắt buộc                     | Bắt đầu áp dụng (bao gồm mốc này)               |
+| ends_at    | timestamp   | > starts_at                  | Hết hạn (loại trừ mốc này)                      |
+| max_uses   | int         | >= 1                         | Số lượt dùng tối đa                             |
+| used_count | int         | 0 đến max_uses, mặc định 0   | Số lượt đã dùng (đơn hủy được trả lại lượt)     |
+| is_active  | bool        | mặc định true                | Bật/tắt mã (US-24 AC2)                          |

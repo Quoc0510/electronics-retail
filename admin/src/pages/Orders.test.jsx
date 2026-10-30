@@ -213,6 +213,20 @@ describe('Trang chi tiết đơn hàng', () => {
     return calls;
   };
 
+  it('đơn dùng mã giảm giá hiện mã và số tiền giảm; đơn không dùng mã thì không có dòng này (F09)', async () => {
+    await openDetail(detail({ discount: 200000, couponCode: 'GIAM10', total: 1830000 }));
+
+    expect(screen.getByText('Mã giảm giá (GIAM10)')).toBeInTheDocument();
+    expect(screen.getByText('-200.000 ₫')).toBeInTheDocument();
+    expect(screen.getByText('1.830.000 ₫')).toBeInTheDocument();
+  });
+
+  it('đơn không dùng mã giảm giá không có dòng mã giảm giá (F09)', async () => {
+    await openDetail(detail({ discount: 0, couponCode: null }));
+
+    expect(screen.queryByText(/Mã giảm giá \(/)).not.toBeInTheDocument();
+  });
+
   it('hiện khách hàng, địa chỉ, ghi chú, thanh toán, sản phẩm, tổng tiền và lịch sử kèm người thực hiện', async () => {
     await openDetail();
 

@@ -1,7 +1,6 @@
-// @feature [F00-F08] Lược đồ cơ sở dữ liệu PostgreSQL (Prisma ORM).
+// @feature [F00-F09] Lược đồ cơ sở dữ liệu PostgreSQL (Prisma ORM).
 // Quy ước (docs/CODING_CONVENTION.md): model PascalCase số ít, bảng/cột snake_case qua @map/@@map.
 // Tiền tệ lưu bằng Int (đơn vị VND) - quy tắc BR-01.
-// Model Coupon (F09) sẽ được thêm bằng migration khi làm tính năng đó.
 
 generator client {
   provider = "prisma-client-js"
@@ -35,6 +34,14 @@ enum OrderStatus {
 }
 
 // Hiện chỉ có COD; sẽ bổ sung VNPAY/ZALOPAY nếu làm F11
+// [F09] Loại mã giảm giá: theo phần trăm tiền hàng hoặc số tiền cố định (US-24)
+enum CouponType {
+  PERCENT
+  FIXED
+
+  @@map("coupon_type")
+}
+
 enum PaymentMethod {
   COD
 
@@ -172,9 +179,9 @@ model Product {
   createdAt   DateTime @default(now()) @map("created_at")
   updatedAt   DateTime @updatedAt @map("updated_at")
 
-  category   Category       @relation(fields: [categoryId], references: [id])
-  brand      Brand          @relation(fields: [brandId], references: [id])
-  images     ProductImage[]
+  category      Category       @relation(fields: [categoryId], references: [id])
+  brand         Brand          @relation(fields: [brandId], references: [id])
+  images        ProductImage[]
   cartItems     CartItem[]
   orderItems    OrderItem[]
   reviews       Review[]
@@ -256,10 +263,16 @@ model Order {
   // [F13] Mã do trình duyệt sinh cho mỗi lần đặt của khách vãng lai: gửi lại cùng mã (bấm đúp, mất mạng rồi thử lại)
   // chỉ trả đơn đã tạo, không tạo đơn thứ hai
   idempotencyKey  String?       @unique @map("idempotency_key")
+  // [F09] Số tiền được giảm trên tiền hàng (0 nếu không dùng mã) và bản sao mã đã dùng (BR-04, BR-14).
+  // Tổng thanh toán = subtotal - discount + shippingFee; phí ship và điểm thành viên tính trên subtotal - discount
+  discount        Int           @default(0)
+  couponId        Int?          @map("coupon_id")
+  couponCode      String?       @map("coupon_code")
   createdAt       DateTime      @default(now()) @map("created_at")
   updatedAt       DateTime      @updatedAt @map("updated_at")
 
   user    User?                @relation(fields: [userId], references: [id], onDelete: Restrict)
+  coupon  Coupon?              @relation(fields: [couponId], references: [id], onDelete: Restrict)
   items   OrderItem[]
   history OrderStatusHistory[]
 
@@ -342,4 +355,27 @@ model WishlistItem {
 
   @@unique([userId, productId])
   @@map("wishlist_items")
+}
+
+// [F09] Mã giảm giá (US-24, US-25, BR-14). Mã luôn lưu IN HOA; used_count chỉ tăng bằng câu UPDATE có điều kiện
+// (used_count < max_uses) nên không bao giờ vượt số lượt tối đa dù nhiều đơn dùng cùng lúc.
+model Coupon {
+  id        Int        @id @default(autoincrement())
+  code      String     @unique
+  type      CouponType
+  // PERCENT: 1-100 (phần trăm tiền hàng); FIXED: số tiền VND
+  value     Int
+  minOrder  Int        @default(0) @map("min_order")
+  startsAt  DateTime   @map("starts_at")
+  endsAt    DateTime   @map("ends_at")
+  maxUses   Int        @map("max_uses")
+  usedCount Int        @default(0) @map("used_count")
+  isActive  Boolean    @default(true) @map("is_active")
+  createdAt DateTime   @default(now()) @map("created_at")
+  updatedAt DateTime   @updatedAt @map("updated_at")
+
+  orders Order[]
+
+  @@index([isActive, endsAt])
+  @@map("coupons")
 }

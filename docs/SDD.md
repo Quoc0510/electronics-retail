@@ -57,7 +57,7 @@ Cấu trúc thư mục backend khớp sơ đồ: `src/routes`, `src/controllers`
 
 ## 4. Sơ đồ thực thể - quan hệ (ERD)
 
-Khớp với `backend/prisma/schema.prisma` (các tính năng F00–F08 và F13). Coupon (F09) chưa triển khai nên chưa có trong sơ đồ này.
+Khớp với `backend/prisma/schema.prisma` (các tính năng F00–F09 và F13).
 
 ```mermaid
 erDiagram
@@ -78,6 +78,7 @@ erDiagram
     products ||--o{ reviews : "có"
     users ||--o{ wishlist_items : "lưu"
     products ||--o{ wishlist_items : "được lưu trong"
+    coupons ||--o{ orders : "được dùng trong"
 
     users {
         int id PK
@@ -162,6 +163,9 @@ erDiagram
         enum payment_status "UNPAID, PAID"
         int subtotal
         int shipping_fee
+        int discount "số tiền giảm bởi mã (F09)"
+        int coupon_id FK "mã đã dùng, có thể rỗng"
+        string coupon_code "bản sao mã đã dùng"
         int total
         string recipient_name
         string phone
@@ -187,6 +191,18 @@ erDiagram
         string note
         int changed_by_id FK
     }
+    coupons {
+        int id PK
+        string code UK "in hoa"
+        enum type "PERCENT, FIXED"
+        int value
+        int min_order
+        timestamp starts_at
+        timestamp ends_at
+        int max_uses
+        int used_count "không vượt max_uses"
+        bool is_active
+    }
     reviews {
         int id PK
         int product_id FK
@@ -202,7 +218,7 @@ erDiagram
     }
 ```
 
-Ghi chú: ngoài các cột trên, hầu hết bảng còn có `created_at` và `updated_at`. Ràng buộc CHECK (tồn kho không âm, giá dương, số lượng ≥ 1, tiền không âm) nằm ở cuối file migration `20261021000000_init`; điểm không âm (F13) nằm ở `20261028000000_guest_checkout_points` và tổng đã mua không âm ở `20261029010000_points_cumulative`; số sao 1 đến 5 và bình luận tối đa 500 ký tự (F08) nằm ở `20261029000000_reviews_wishlist`, cùng ràng buộc UNIQUE `(product_id, user_id)` của đánh giá và `(user_id, product_id)` của yêu thích.
+Ghi chú: ngoài các cột trên, hầu hết bảng còn có `created_at` và `updated_at`. Ràng buộc CHECK (tồn kho không âm, giá dương, số lượng ≥ 1, tiền không âm) nằm ở cuối file migration `20261021000000_init`; điểm không âm (F13) nằm ở `20261028000000_guest_checkout_points` và tổng đã mua không âm ở `20261029010000_points_cumulative`; ràng buộc mã giảm giá (mã in hoa, phần trăm 1-100, thời hạn hợp lệ, `used_count <= max_uses`) và số tiền giảm không vượt tiền hàng ở `20261030000000_coupons`; số sao 1 đến 5 và bình luận tối đa 500 ký tự (F08) nằm ở `20261029000000_reviews_wishlist`, cùng ràng buộc UNIQUE `(product_id, user_id)` của đánh giá và `(user_id, product_id)` của yêu thích.
 
 ## 5. Sơ đồ tuần tự
 
@@ -323,15 +339,16 @@ Môi trường local: `docker-compose.yml` chạy PostgreSQL; backend và hai fr
 
 ## 8. Nhật ký thay đổi thiết kế
 
-| Ngày       | Thay đổi                                                                                                                                                                                                                                                                                                                  | Lý do                                                                                                                   |
-| ---------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ----------------------------------------------------------------------------------------------------------------------- |
-| 21/10/2026 | Chốt schema ban đầu F00–F07; không dùng biến thể sản phẩm; giỏ hàng yêu cầu đăng nhập                                                                                                                                                                                                                                     | Phù hợp quy mô 6 tuần, giảm rủi ro trễ tiến độ                                                                          |
-| 28/10/2026 | Giỏ hàng cho khách chưa đăng nhập (lưu trên trình duyệt, gộp vào tài khoản khi đăng nhập); thêm `POST /api/cart/preview` (công khai) và `POST /api/cart/merge`                                                                                                                                                            | Phản hồi người dùng thử: bắt đăng nhập ngay khi thêm vào giỏ gây cản trở; không đổi schema                              |
-| 28/10/2026 | Đặt hàng không cần đăng nhập (F13): `orders.user_id` cho phép rỗng, thêm `idempotency_key`, `points_earned`, `users.points`; tra cứu và hủy đơn bằng mã đơn + số điện thoại; cộng điểm thành viên khi đơn hoàn thành                                                                                                      | Phản hồi người dùng thử lần hai: bắt đăng nhập mới được đặt hàng làm khách bỏ giỏ; mua hàng chỉ để tích điểm thành viên |
-| 28/10/2026 | Dashboard thống kê và quản lý người dùng (F10): `GET /api/admin/stats`, `GET /api/admin/users`, `PATCH /api/admin/users/:id/status`; không đổi schema                                                                                                                                                                     | Hoàn thành chức năng bắt buộc F10 (US-26, US-27)                                                                        |
-| 29/10/2026 | Đánh giá và yêu thích (F08): bảng `reviews`, `wishlist_items` (migration `20261029000000_reviews_wishlist`); `GET/POST /api/products/:slug/reviews`, `GET/PATCH .../reviews/mine`, `GET /api/admin/reviews`, `PATCH /api/admin/reviews/:id/visibility`, `GET/PUT/DELETE /api/wishlist`; API sản phẩm thêm trường `rating` | Hoàn thành chức năng F08 (US-21, US-22, US-23)                                                                          |
-| 29/10/2026 | Đổi cách tính điểm thành viên (BR-15): cộng dồn theo tổng tiền hàng đã mua, 1.000.000 đ = 1 điểm; thêm `users.total_spent` (migration `20261029010000_points_cumulative` tính lại điểm của dữ liệu cũ); `GET /api/users/me` thêm `totalSpent`                                                                             | Yêu cầu của nhóm: điểm theo tổng giá trị mọi đơn hàng, không theo từng đơn                                              |
-| 28/10/2026 | `addresses.district` cho phép rỗng; địa chỉ ghép bỏ phần trống                                                                                                                                                                                                                                                            | Nhiều địa phương đã bỏ cấp quận/huyện nên không thể bắt khách nhập                                                      |
+| Ngày       | Thay đổi                                                                                                                                                                                                                                                                                                                           | Lý do                                                                                                                   |
+| ---------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ----------------------------------------------------------------------------------------------------------------------- |
+| 21/10/2026 | Chốt schema ban đầu F00–F07; không dùng biến thể sản phẩm; giỏ hàng yêu cầu đăng nhập                                                                                                                                                                                                                                              | Phù hợp quy mô 6 tuần, giảm rủi ro trễ tiến độ                                                                          |
+| 28/10/2026 | Giỏ hàng cho khách chưa đăng nhập (lưu trên trình duyệt, gộp vào tài khoản khi đăng nhập); thêm `POST /api/cart/preview` (công khai) và `POST /api/cart/merge`                                                                                                                                                                     | Phản hồi người dùng thử: bắt đăng nhập ngay khi thêm vào giỏ gây cản trở; không đổi schema                              |
+| 28/10/2026 | Đặt hàng không cần đăng nhập (F13): `orders.user_id` cho phép rỗng, thêm `idempotency_key`, `points_earned`, `users.points`; tra cứu và hủy đơn bằng mã đơn + số điện thoại; cộng điểm thành viên khi đơn hoàn thành                                                                                                               | Phản hồi người dùng thử lần hai: bắt đăng nhập mới được đặt hàng làm khách bỏ giỏ; mua hàng chỉ để tích điểm thành viên |
+| 28/10/2026 | Dashboard thống kê và quản lý người dùng (F10): `GET /api/admin/stats`, `GET /api/admin/users`, `PATCH /api/admin/users/:id/status`; không đổi schema                                                                                                                                                                              | Hoàn thành chức năng bắt buộc F10 (US-26, US-27)                                                                        |
+| 29/10/2026 | Đánh giá và yêu thích (F08): bảng `reviews`, `wishlist_items` (migration `20261029000000_reviews_wishlist`); `GET/POST /api/products/:slug/reviews`, `GET/PATCH .../reviews/mine`, `GET /api/admin/reviews`, `PATCH /api/admin/reviews/:id/visibility`, `GET/PUT/DELETE /api/wishlist`; API sản phẩm thêm trường `rating`          | Hoàn thành chức năng F08 (US-21, US-22, US-23)                                                                          |
+| 29/10/2026 | Đổi cách tính điểm thành viên (BR-15): cộng dồn theo tổng tiền hàng đã mua, 1.000.000 đ = 1 điểm; thêm `users.total_spent` (migration `20261029010000_points_cumulative` tính lại điểm của dữ liệu cũ); `GET /api/users/me` thêm `totalSpent`                                                                                      | Yêu cầu của nhóm: điểm theo tổng giá trị mọi đơn hàng, không theo từng đơn                                              |
+| 30/10/2026 | Mã giảm giá (F09): bảng `coupons`, `orders.discount`, `orders.coupon_id`, `orders.coupon_code` (migration `20261030000000_coupons`); `POST /api/coupons/preview`, `GET/POST/PATCH /api/admin/coupons`; `POST /api/orders` và `/api/orders/guest` nhận `couponCode`; phí vận chuyển và điểm thành viên tính trên tiền hàng sau giảm | Hoàn thành chức năng bổ sung F09 (US-24, US-25)                                                                         |
+| 28/10/2026 | `addresses.district` cho phép rỗng; địa chỉ ghép bỏ phần trống                                                                                                                                                                                                                                                                     | Nhiều địa phương đã bỏ cấp quận/huyện nên không thể bắt khách nhập                                                      |
 
 ## 9. Danh sách API đã triển khai
 
@@ -479,10 +496,10 @@ Quyết định thiết kế F05:
 
 ### F06 - Đặt hàng (COD; thành viên dùng giỏ tài khoản, khách xem F13 bên dưới)
 
-| Method | Đường dẫn         | Mô tả                                                                                   | User story |
-| ------ | ----------------- | --------------------------------------------------------------------------------------- | ---------- |
-| POST   | /api/orders       | Tạo đơn từ giỏ hàng của người dùng: `{ addressId }` hoặc `{ shipping: {...} }`, `note?` | US-16      |
-| GET    | /api/orders/:code | Xem một đơn của chính mình theo mã đơn; đơn của người khác trả 404                      | US-16      |
+| Method | Đường dẫn         | Mô tả                                                                                                        | User story |
+| ------ | ----------------- | ------------------------------------------------------------------------------------------------------------ | ---------- |
+| POST   | /api/orders       | Tạo đơn từ giỏ hàng của người dùng: `{ addressId }` hoặc `{ shipping: {...} }`, `note?`, `couponCode?` (F09) | US-16      |
+| GET    | /api/orders/:code | Xem một đơn của chính mình theo mã đơn; đơn của người khác trả 404                                           | US-16      |
 
 Danh sách đơn của khách, hủy đơn và quản lý của Admin làm ở F07 (xem bên dưới).
 
@@ -593,6 +610,27 @@ Quyết định thiết kế F08:
 - **Yêu thích idempotent:** thêm hai lần hoặc hai request cùng lúc đều ra cùng kết quả (bắt `P2002`), bỏ sản phẩm không có trong danh sách vẫn 204. Id sản phẩm nằm trên đường dẫn (`:id`) giống `DELETE /api/cart/items/:id`.
 - Chưa có xóa đánh giá của chính mình (xem TECH_DEBT.md).
 
+### F09 - Mã giảm giá
+
+| Method | Đường dẫn              | Quyền     | Mô tả                                                                                                                                    | User story |
+| ------ | ---------------------- | --------- | ---------------------------------------------------------------------------------------------------------------------------------------- | ---------- |
+| POST   | /api/coupons/preview   | Công khai | `{ code, subtotal }`: xem trước số tiền giảm (`code`, `type`, `value`, `minOrder`, `discount`); giới hạn 30 lần / 15 phút / IP           | US-25      |
+| GET    | /api/admin/coupons     | ADMIN     | Danh sách mã kèm `state` (`RUNNING`, `UPCOMING`, `EXPIRED`, `EXHAUSTED`, `DISABLED`): `search` (theo mã), `status` (`on`, `off`), `page` | US-24      |
+| POST   | /api/admin/coupons     | ADMIN     | `{ code, type, value, minOrder?, startsAt, endsAt, maxUses, isActive? }`: tạo mã; 409 `COUPON_EXISTS` nếu trùng                          | US-24      |
+| PATCH  | /api/admin/coupons/:id | ADMIN     | Sửa từng phần (không nhận `code`); 409 `COUPON_MAX_USES_TOO_LOW` nếu `maxUses` nhỏ hơn số lượt đã dùng; 404 `COUPON_NOT_FOUND`           | US-24      |
+
+Mã lỗi khi dùng mã (xem trước và đặt hàng): `COUPON_NOT_FOUND` (404), `COUPON_INACTIVE`, `COUPON_NOT_STARTED`, `COUPON_EXPIRED`, `COUPON_EXHAUSTED`, `COUPON_MIN_ORDER` (400, kèm `details.minOrder`). `POST /api/orders` và `POST /api/orders/guest` nhận thêm `couponCode` (không bắt buộc, chuỗi rỗng coi như không dùng); đơn trả thêm `discount` và `couponCode`.
+
+Quyết định thiết kế F09:
+
+- **Máy chủ tính lại số tiền giảm khi đặt hàng:** `redeemCoupon` chạy trong CHÍNH transaction đặt hàng, tính trên tiền hàng thật của giỏ. Số "xem trước" ở Client chỉ để hiển thị; khách sửa số gửi lên cũng không đổi được số tiền giảm.
+- **Giữ chỗ lượt dùng nguyên tử:** `UPDATE coupons SET used_count = used_count + 1 WHERE id = ? AND is_active AND used_count < max_uses`. Hai đơn tranh lượt cuối thì đúng một đơn thắng, đơn thua nhận `COUPON_EXHAUSTED` và transaction hoàn lại cả kho. Ràng buộc `CHECK (used_count <= max_uses)` là chốt chặn cuối. Xem trước không giữ chỗ.
+- **Đơn lỗi hoặc bị hủy thì trả lượt:** lỗi ở bất kỳ bước nào sau khi dùng mã làm hoàn lại cả transaction (kể cả lượt dùng); hủy đơn (khách, khách vãng lai, Admin) trừ lại `used_count` đúng một lần, cùng chỗ với việc cộng trả kho (`changeStatus`).
+- **Tiền hàng sau giảm quyết định phí ship và điểm** (theo yêu cầu nhóm 30/10/2026): `shippingFee = calculateShippingFee(subtotal - discount)`, `total = subtotal - discount + shippingFee`; `total_spent` và điểm cộng theo `subtotal - discount`. `orders.subtotal` vẫn là tiền hàng gốc để đối chiếu với các dòng hàng.
+- **`lib/coupon.js` là hàm thuần** (`calculateDiscount`, `couponProblem`, `couponState`): dùng chung cho xem trước, đặt hàng và trạng thái hiển thị của Admin, test riêng không cần CSDL.
+- **Không xóa mã:** khóa ngoại `orders.coupon_id` là `RESTRICT` và đơn đã lưu bản sao mã; muốn ngừng dùng thì tắt (như BR-09). Không đổi được `code`.
+- **Chống dò mã:** `POST /api/coupons/preview` công khai nên có giới hạn tốc độ riêng (`COUPON_RATE_LIMIT`); mã luôn so sánh sau khi chuẩn hóa in hoa.
+
 ### Quyết định bảo mật của F01
 
 - Access token JWT sống 15 phút; refresh token là chuỗi ngẫu nhiên 256 bit sống 7 ngày, DB chỉ lưu bản băm SHA-256.
@@ -625,6 +663,7 @@ Client và Admin dùng chung `shared` để không viết lặp logic đăng nh�
 | Admin    | `/` và các trang khác | Vai trò ADMIN | Tổng quan (dashboard thống kê từ F10)   | US-05, US-26 |
 | Admin    | `/nguoi-dung`         | Vai trò ADMIN | Quản lý người dùng (F10)                | US-27        |
 | Admin    | `/danh-gia`           | Vai trò ADMIN | Quản lý đánh giá (F08)                  | US-23        |
+| Admin    | `/ma-giam-gia`        | Vai trò ADMIN | Quản lý mã giảm giá (F09)               | US-24        |
 
 ### Luồng làm mới phiên (US-03)
 
@@ -860,3 +899,14 @@ Quyết định: thẻ số liệu xếp biểu tượng và nhãn ở hàng tr�
 | `ReviewsPage` (Admin, `/danh-gia`)   | Bảng đánh giá: tìm theo sản phẩm, người viết hoặc nội dung (chờ 300 ms), lọc trạng thái và số sao, phân trang; nút Ẩn hoặc Bỏ ẩn làm ngay (không hỏi lại vì hoàn tác được bằng một cú nhấp). Hàng đã ẩn nền xám. Mục "Đánh giá" ở thanh bên.                                                                                             |
 
 Quyết định: ẩn đánh giá không hỏi xác nhận (khác khóa tài khoản ở F10) vì hoàn tác ngay được và không có hậu quả ra ngoài; nút trái tim và nút so sánh xếp dọc ở góc ảnh thẻ để không đè nhãn giảm giá bên trái.
+
+## 20. Giao diện mã giảm giá F09 (Client và Admin)
+
+| Thành phần                            | Vai trò                                                                                                                                                                                                                                  |
+| ------------------------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `CouponBox` (Client)                  | Bước 4 của trang đặt hàng: ô nhập mã (tự in hoa), nút Áp dụng; mã hợp lệ hiện "Đã áp dụng mã X: giảm Y" kèm nút Bỏ mã; mã lỗi hiện đúng lý do và nút Xóa mã. Phím Enter chỉ áp mã, không gửi đơn vì ô nằm trong form đặt hàng.           |
+| `useCouponPreview` (Client)           | Gọi `POST /coupons/preview` với khóa cache gồm mã và tiền hàng, nên giỏ đổi thì tự kiểm tra lại. Khi kiểm tra lại mà lỗi thì bỏ kết quả cũ (không giữ "đã áp dụng" của mã vừa hết hạn) và mã lỗi không được gửi kèm đơn.                 |
+| `CheckoutPage`, `OrderPage`           | Thêm dòng "Mã giảm giá (X) -Y"; phí ship, tổng và điểm dự kiến tính trên tiền hàng sau giảm; đặt hàng bị từ chối vì mã (vừa hết lượt) thì hiện lỗi và kiểm tra lại ô mã. Trang chi tiết đơn của Admin cũng hiện dòng này.                |
+| `CouponsPage` (Admin, `/ma-giam-gia`) | Bảng mã (mức giảm, đơn tối thiểu, thời hạn, đã dùng/tối đa, trạng thái), tìm theo mã (chờ 300 ms), lọc bật/tắt, phân trang; form thêm và sửa ngay trên trang (mã bị khóa khi sửa); nút Tắt/Bật không hỏi xác nhận vì hoàn tác ngay được. |
+
+Quyết định: ô nhập mã đặt sau ghi chú (bước 4) thay vì trong khung tổng tiền để khung tóm tắt giữ gọn; số tiền giảm hiện ngay trong khung tóm tắt. Ngày giờ của mã nhập bằng `datetime-local` theo giờ trình duyệt của Admin rồi gửi lên dạng UTC (xem TECH_DEBT.md).

@@ -1,5 +1,5 @@
 /**
- * @feature [F06][F07][F13] Đơn hàng - Trang /don-hang/:code: chi tiết một đơn.
+ * @feature [F06][F07][F09][F13] Đơn hàng - Trang /don-hang/:code: chi tiết một đơn (kèm mã giảm giá đã dùng, BR-14).
  * Vừa đặt xong (state.justPlaced) thì hiện khung "Đặt hàng thành công" kèm mã đơn (US-16 AC3). Có dòng thời gian trạng thái
  * (US-17 AC2) và, khi đơn còn chờ xác nhận, khung hủy đơn có lý do (US-18); đơn đã hủy hiện lý do hủy.
  * Đơn không tồn tại hoặc của người khác đều hiện "không tìm thấy" (backend trả 404 cho cả hai).
@@ -229,6 +229,12 @@ export default function OrderPage() {
                 <dt className="text-slate-600">Tạm tính</dt>
                 <dd className="font-semibold text-slate-900">{formatVnd(order.subtotal)}</dd>
               </div>
+              {order.discount > 0 && (
+                <div className="flex justify-between">
+                  <dt className="text-slate-600">Mã giảm giá ({order.couponCode})</dt>
+                  <dd className="font-semibold text-emerald-700">-{formatVnd(order.discount)}</dd>
+                </div>
+              )}
               <div className="flex justify-between">
                 <dt className="text-slate-600">Phí vận chuyển</dt>
                 <dd className="font-semibold text-slate-900">

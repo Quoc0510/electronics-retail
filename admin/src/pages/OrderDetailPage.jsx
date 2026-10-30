@@ -1,5 +1,5 @@
 /**
- * @feature [F07][F13] Quản lý đơn hàng - Trang chi tiết đơn của Admin: thông tin khách, sản phẩm, tổng tiền, lịch sử và
+ * @feature [F07][F09][F13] Quản lý đơn hàng - Trang chi tiết đơn của Admin: thông tin khách, sản phẩm, tổng tiền (kèm mã giảm giá), lịch sử và
  * xử lý đơn (US-19 AC2 đến AC4) cùng in phiếu đơn hàng (US-20).
  *  - Chỉ hiện các nút của bước tiếp theo hợp lệ (BR-06, danh sách do máy chủ trả về trong allowedNext); máy chủ vẫn từ chối bước sai.
  *  - Hủy đơn bắt buộc có lý do (kho được hoàn lại, BR-07); hoàn thành đơn COD thì thành "đã thanh toán" (BR-08).
@@ -216,6 +216,12 @@ export default function OrderDetailPage() {
                 <dt className="text-slate-600">Tạm tính</dt>
                 <dd className="font-semibold text-slate-900">{formatVnd(order.subtotal)}</dd>
               </div>
+              {order.discount > 0 && (
+                <div className="flex justify-between">
+                  <dt className="text-slate-600">Mã giảm giá ({order.couponCode})</dt>
+                  <dd className="font-semibold text-emerald-700">-{formatVnd(order.discount)}</dd>
+                </div>
+              )}
               <div className="flex justify-between">
                 <dt className="text-slate-600">Phí vận chuyển</dt>
                 <dd className="font-semibold text-slate-900">
