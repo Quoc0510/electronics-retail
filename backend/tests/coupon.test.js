@@ -1280,3 +1280,212 @@ describe('Đặt hàng với mã có điều kiện phụ (BR-14)', () => {
     expect(quote.body.discount).toBe(1_500_000);
   });
 });
+
+// ---------------------------------------------------------------------------
+// Mã tự động áp dụng ở bước thanh toán (US-25 AC10 đến AC12)
+// ---------------------------------------------------------------------------
+describe('POST /api/coupons/auto', () => {
+  const auto = (items, token) => {
+    const req = request(app).post('/api/coupons/auto');
+    if (token) req.set(auth(token));
+    return req.send({ items });
+  };
+  // Mã bật tự động áp dụng, còn hiệu lực
+  const makeAuto = (code, overrides = {}) => makeCoupon({ code, autoApply: true, ...overrides });
+  const oneProduct = async (price) => {
+    const product = await makeProduct({ price });
+    return [{ productId: product.id, quantity: 1 }];
+  };
+
+  it('không có mã nào bật tự động áp dụng thì trả coupon null, kể cả khi có mã thường dùng được', async () => {
+    await makeCoupon({ code: 'NHAPTAY' });
+    const res = await auto(await oneProduct(2_000_000));
+    expect(res.status).toBe(200);
+    expect(res.body).toEqual({ coupon: null });
+  });
+
+  it('chọn mã bật tự động áp dụng và trả đủ thông tin như xem trước; không tốn lượt dùng', async () => {
+    await makeAuto('TUDONG', { maxUses: 5 });
+    const res = await auto(await oneProduct(2_000_000));
+    expect(res.status).toBe(200);
+    expect(res.body.coupon).toEqual({
+      code: 'TUDONG',
+      type: 'PERCENT',
+      value: 10,
+      minOrder: 0,
+      minPoints: 0,
+      scoped: false,
+      eligibleSubtotal: 2_000_000,
+      discount: 200_000,
+    });
+    expect((await couponRow('TUDONG')).usedCount).toBe(0); // chỉ là gợi ý, không giữ chỗ
+  });
+
+  it('chọn mã GIẢM NHIỀU TIỀN NHẤT cho đúng giỏ hàng này', async () => {
+    await makeAuto('PHANTRAM', { type: 'PERCENT', value: 10 });
+    await makeAuto('CODINH', { type: 'FIXED', value: 300_000 });
+
+    // Giỏ 2.000.000: 10% = 200.000 < 300.000 nên chọn mã cố định
+    expect((await auto(await oneProduct(2_000_000))).body.coupon.code).toBe('CODINH');
+    // Giỏ 5.000.000: 10% = 500.000 > 300.000 nên chọn mã phần trăm
+    expect((await auto(await oneProduct(5_000_000))).body.coupon.code).toBe('PHANTRAM');
+  });
+
+  it('bằng nhau thì chọn mã hết hạn sớm hơn, rồi mã tạo trước', async () => {
+    const soon = new Date(Date.now() + 2 * HOUR);
+    const later = new Date(Date.now() + 48 * HOUR);
+    await makeAuto('DAI', { type: 'FIXED', value: 100_000, endsAt: later });
+    await makeAuto('NGAN', { type: 'FIXED', value: 100_000, endsAt: soon });
+    expect((await auto(await oneProduct(1_000_000))).body.coupon.code).toBe('NGAN');
+
+    await makeAuto('NGAN2', { type: 'FIXED', value: 100_000, endsAt: soon });
+    expect((await auto(await oneProduct(1_000_000))).body.coupon.code).toBe('NGAN'); // tạo trước NGAN2
+  });
+
+  it.each([
+    ['đã tắt', { isActive: false }],
+    [
+      'chưa đến hạn',
+      { startsAt: new Date(Date.now() + HOUR), endsAt: new Date(Date.now() + 2 * HOUR) },
+    ],
+    [
+      'đã hết hạn',
+      { startsAt: new Date(Date.now() - 2 * HOUR), endsAt: new Date(Date.now() - HOUR) },
+    ],
+    ['hết lượt', { maxUses: 1, usedCount: 1 }],
+    ['chưa đạt đơn tối thiểu', { minOrder: 5_000_000 }],
+    ['cần điểm thành viên mà khách chưa đăng nhập', { minPoints: 10 }],
+  ])('bỏ qua mã %s', async (_label, overrides) => {
+    await makeAuto('KHONGDUNG', overrides);
+    const res = await auto(await oneProduct(2_000_000));
+    expect(res.status).toBe(200);
+    expect(res.body.coupon).toBeNull();
+  });
+
+  it('mã không dùng được thì rơi về mã tốt nhất trong các mã còn lại', async () => {
+    await makeAuto('TOTNHAT', { type: 'FIXED', value: 900_000, isActive: false });
+    await makeAuto('CONLAI', { type: 'FIXED', value: 100_000 });
+    expect((await auto(await oneProduct(2_000_000))).body.coupon.code).toBe('CONLAI');
+  });
+
+  it('mã cần điểm: thành viên đủ điểm được chọn, khách và thành viên thiếu điểm thì không', async () => {
+    const rich = await signIn('giau@example.com');
+    const poor = await signIn('ngheo@example.com');
+    await prisma.user.update({ where: { id: rich.user.id }, data: { points: 50 } });
+    await makeAuto('VIP', { type: 'FIXED', value: 500_000, minPoints: 50 });
+    await makeAuto('AI-CUNG-DUOC', { type: 'FIXED', value: 50_000 });
+    const items = await oneProduct(2_000_000);
+
+    expect((await auto(items, rich.token)).body.coupon.code).toBe('VIP');
+    expect((await auto(items, poor.token)).body.coupon.code).toBe('AI-CUNG-DUOC');
+    expect((await auto(items)).body.coupon.code).toBe('AI-CUNG-DUOC');
+  });
+
+  it('mã có phạm vi: chỉ chọn khi giỏ có sản phẩm khớp và tính giảm trên phần đó', async () => {
+    const shelf = await makeShelf();
+    await makeAuto('PHUKIEN-TD', {
+      categoryIds: [shelf.accessories.id],
+      type: 'PERCENT',
+      value: 20,
+    });
+
+    const withAccessory = await auto(cartOf(shelf.phone, shelf.charger));
+    expect(withAccessory.body.coupon).toMatchObject({
+      code: 'PHUKIEN-TD',
+      scoped: true,
+      eligibleSubtotal: 500_000,
+      discount: 100_000,
+    });
+    expect((await auto(cartOf(shelf.phone))).body.coupon).toBeNull();
+  });
+
+  it('bỏ qua mã mà số tiền giảm tính ra bằng 0', async () => {
+    await makeAuto('BEXIU', { type: 'PERCENT', value: 1 });
+    const res = await auto(await oneProduct(50)); // 1% của 50 đồng, làm tròn xuống = 0
+    expect(res.body.coupon).toBeNull();
+  });
+
+  it('giỏ chỉ có sản phẩm đã ẩn thì không có gợi ý', async () => {
+    await makeAuto('TUDONG');
+    const hidden = await makeProduct({ price: 2_000_000, isActive: false });
+    const res = await auto([{ productId: hidden.id, quantity: 1 }]);
+    expect(res.body.coupon).toBeNull();
+  });
+
+  it('công khai cho khách; token sai thì 401; thiếu hoặc rỗng giỏ hàng thì 400', async () => {
+    await makeAuto('TUDONG');
+    expect((await auto(await oneProduct(1_000_000))).status).toBe(200);
+    expect((await auto(await oneProduct(1_000_000), 'token-sai')).status).toBe(401);
+    expect((await request(app).post('/api/coupons/auto').send({})).status).toBe(400);
+    expect((await auto([])).status).toBe(400);
+    expect((await auto([{ productId: 1, quantity: 0 }])).status).toBe(400);
+  });
+
+  it('mã gợi ý đặt hàng được và số tiền giảm khớp với gợi ý (hai nơi dùng chung một hàm kiểm tra)', async () => {
+    const buyer = await signIn();
+    const product = await makeProduct({ price: 3_000_000 });
+    await fillCart(buyer.user.id, product);
+    await makeAuto('TUDONG', { type: 'FIXED', value: 250_000 });
+
+    const suggestion = await auto([{ productId: product.id, quantity: 1 }], buyer.token);
+    const order = await memberOrder(buyer, suggestion.body.coupon.code);
+    expect(order.status).toBe(201);
+    expect(order.body.discount).toBe(suggestion.body.coupon.discount);
+    expect(order.body.couponCode).toBe('TUDONG');
+  });
+
+  it('mã bị dùng hết giữa lúc gợi ý và đặt hàng thì đặt hàng báo lỗi rõ, không tạo đơn', async () => {
+    const buyer = await signIn();
+    const product = await makeProduct({ price: 1_000_000 });
+    await fillCart(buyer.user.id, product);
+    await makeAuto('SAPHET', { maxUses: 1 });
+
+    const suggestion = await auto([{ productId: product.id, quantity: 1 }], buyer.token);
+    expect(suggestion.body.coupon.code).toBe('SAPHET');
+    await prisma.coupon.update({ where: { code: 'SAPHET' }, data: { usedCount: 1 } }); // người khác dùng mất
+
+    const order = await memberOrder(buyer, 'SAPHET');
+    expect(order.status).toBe(400);
+    expect(order.body.error.code).toBe('COUPON_EXHAUSTED');
+    expect(await prisma.order.count()).toBe(0);
+  });
+});
+
+describe('Admin bật/tắt tự động áp dụng cho mã (US-24)', () => {
+  const body = (overrides = {}) => ({
+    code: 'TUDONG1',
+    type: 'PERCENT',
+    value: 10,
+    startsAt: new Date(Date.now() - HOUR).toISOString(),
+    endsAt: new Date(Date.now() + 24 * HOUR).toISOString(),
+    maxUses: 10,
+    ...overrides,
+  });
+
+  it('mặc định không tự động áp dụng; tạo mã có bật thì lưu và trả về', async () => {
+    const admin = await signIn('admin@example.com', 'ADMIN');
+    const plain = await request(app).post('/api/admin/coupons').set(auth(admin.token)).send(body());
+    expect(plain.status).toBe(201);
+    expect(plain.body.autoApply).toBe(false);
+
+    const withAuto = await request(app)
+      .post('/api/admin/coupons')
+      .set(auth(admin.token))
+      .send(body({ code: 'TUDONG2', autoApply: true }));
+    expect(withAuto.body.autoApply).toBe(true);
+    expect((await couponRow('TUDONG2')).autoApply).toBe(true);
+  });
+
+  it('sửa bật rồi tắt; danh sách trả cờ này; giá trị sai kiểu bị từ chối', async () => {
+    const admin = await signIn('admin@example.com', 'ADMIN');
+    const coupon = await makeCoupon({ code: 'DOI' });
+    const patch = (data) =>
+      request(app).patch(`/api/admin/coupons/${coupon.id}`).set(auth(admin.token)).send(data);
+
+    expect((await patch({ autoApply: true })).body.autoApply).toBe(true);
+    const list = await request(app).get('/api/admin/coupons').set(auth(admin.token));
+    expect(list.body.items.find((item) => item.code === 'DOI').autoApply).toBe(true);
+    expect((await patch({ autoApply: false })).body.autoApply).toBe(false);
+    expect((await patch({ autoApply: 'true' })).status).toBe(400);
+  });
+});

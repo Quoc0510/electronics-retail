@@ -372,6 +372,9 @@ model Coupon {
   usedCount   Int        @default(0) @map("used_count")
   // Điều kiện phụ: điểm thành viên tối thiểu của người dùng mã (0 = không yêu cầu; khách chưa đăng nhập coi như 0 điểm)
   minPoints   Int        @default(0) @map("min_points")
+  // Tự động áp dụng cho khách ở bước thanh toán (không cần nhập mã): trong các mã bật cờ này và dùng được cho giỏ hàng,
+  // Client chọn mã giảm nhiều tiền nhất. Mã không bật cờ vẫn phải nhập tay (mã riêng, mã tặng khách)
+  autoApply   Boolean    @default(false) @map("auto_apply")
   // Phạm vi áp dụng: sản phẩm thuộc MỘT TRONG ba danh sách (hợp). Cả ba rỗng = áp dụng cho mọi sản phẩm. Lưu dạng mảng
   // (không khóa ngoại) để xóa sản phẩm/danh mục/thương hiệu không làm mã đột ngột áp dụng cho tất cả
   productIds  Int[]      @default([]) @map("product_ids")
@@ -384,5 +387,6 @@ model Coupon {
   orders Order[]
 
   @@index([isActive, endsAt])
+  @@index([autoApply, isActive])
   @@map("coupons")
 }

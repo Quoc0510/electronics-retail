@@ -8,7 +8,7 @@ import { env } from '../config/env.js';
 import { optionalAuthenticate } from '../middlewares/auth.js';
 import { validate } from '../middlewares/validate.js';
 import * as couponController from '../controllers/coupon.controller.js';
-import { previewCouponSchema } from '../validators/coupon.validator.js';
+import { autoCouponSchema, previewCouponSchema } from '../validators/coupon.validator.js';
 
 const router = Router();
 
@@ -29,6 +29,15 @@ router.post(
   optionalAuthenticate,
   validate(previewCouponSchema),
   couponController.preview,
+);
+
+// [F09] Mã tự động áp dụng cho giỏ hàng ở bước thanh toán (dùng chung giới hạn tốc độ và đăng nhập tùy chọn)
+router.post(
+  '/auto',
+  previewLimiter,
+  optionalAuthenticate,
+  validate(autoCouponSchema),
+  couponController.auto,
 );
 
 export default router;
