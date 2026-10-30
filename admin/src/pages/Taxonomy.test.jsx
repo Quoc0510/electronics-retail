@@ -73,10 +73,13 @@ describe('Menu quản trị', () => {
     });
     renderApp('/');
 
-    await userEvent.click(await screen.findByRole('link', { name: 'Danh mục' }));
+    // Chỉ tìm trong menu: trang tổng quan cũng có thẻ liên kết "Danh mục" (F10) hiện ra sau khi tải số liệu,
+    // nên tìm trên cả trang thì lúc trúng lúc trượt tùy tốc độ máy (lỗi gián đoạn khi đo coverage)
+    const menu = await screen.findByRole('navigation', { name: 'Menu quản trị' });
+    await userEvent.click(within(menu).getByRole('link', { name: 'Danh mục' }));
     expect(await screen.findByRole('heading', { name: 'Danh mục sản phẩm' })).toBeInTheDocument();
 
-    await userEvent.click(screen.getByRole('link', { name: 'Thương hiệu' }));
+    await userEvent.click(within(menu).getByRole('link', { name: 'Thương hiệu' }));
     expect(await screen.findByRole('heading', { name: 'Thương hiệu' })).toBeInTheDocument();
   });
 });
