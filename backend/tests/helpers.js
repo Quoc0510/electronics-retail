@@ -7,7 +7,7 @@ import { prisma } from '../src/lib/prisma.js';
 /** Xóa sạch dữ liệu test (chỉ ở schema "test") và đặt lại bộ đếm id. */
 export const resetDatabase = () =>
   prisma.$executeRawUnsafe(
-    'TRUNCATE TABLE users, categories, brands, products, orders RESTART IDENTITY CASCADE',
+    'TRUNCATE TABLE users, categories, brands, products, orders, coupons RESTART IDENTITY CASCADE',
   );
 
 /** Tạo nhanh một người dùng trực tiếp trong DB (bỏ qua API) để chuẩn bị dữ liệu cho test. */

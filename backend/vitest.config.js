@@ -32,6 +32,7 @@ export default defineConfig({
       LOGIN_RATE_LIMIT: '1000',
       GUEST_ORDER_RATE_LIMIT: '1000',
       ORDER_LOOKUP_RATE_LIMIT: '1000',
+      COUPON_RATE_LIMIT: '1000',
       UPLOAD_DIR: TEST_UPLOAD_DIR,
     },
     coverage: {

@@ -13,6 +13,7 @@ import cartRoutes from './cart.routes.js'; // [F05]
 import orderRoutes from './order.routes.js'; // [F06]
 import reviewRoutes from './review.routes.js'; // [F08]
 import wishlistRoutes from './wishlist.routes.js'; // [F08]
+import couponRoutes from './coupon.routes.js'; // [F09]
 
 const router = Router();
 
@@ -26,5 +27,6 @@ router.use('/products', reviewRoutes); // [F08] /api/products/:slug/reviews
 router.use('/cart', cartRoutes); // [F05] giỏ hàng (cần đăng nhập)
 router.use('/orders', orderRoutes); // [F06] đặt hàng và xem đơn của mình (cần đăng nhập)
 router.use('/wishlist', wishlistRoutes); // [F08] danh sách yêu thích (cần đăng nhập)
+router.use('/coupons', couponRoutes); // [F09] xem trước mã giảm giá (công khai, có giới hạn tốc độ)
 
 export default router;

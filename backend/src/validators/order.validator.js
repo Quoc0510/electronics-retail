@@ -8,6 +8,7 @@ import { ORDER_CODE_PATTERN } from '../lib/orderCode.js';
 import { ORDER_STATUSES } from '../lib/orderStatus.js';
 import { addressSchema, phone } from './auth.validator.js';
 import { guestCartSchema } from './cart.validator.js';
+import { orderCouponCode } from './coupon.validator.js'; // [F09]
 
 // Địa chỉ nhập trực tiếp khi đặt hàng: giống địa chỉ trong sổ nhưng không có cờ "mặc định"
 const shippingSchema = addressSchema.omit({ isDefault: true });
@@ -29,6 +30,7 @@ export const createOrderSchema = z
       .optional(),
     shipping: shippingSchema.optional(),
     note,
+    couponCode: orderCouponCode, // [F09] mỗi đơn tối đa một mã (BR-14)
   })
   .refine((data) => (data.addressId === undefined) !== (data.shipping === undefined), {
     message: 'Hãy chọn một địa chỉ đã lưu hoặc nhập địa chỉ giao hàng mới (chỉ một trong hai)',
@@ -105,6 +107,7 @@ export const createGuestOrderSchema = z.object({
   items: guestCartSchema.shape.items.min(1, 'Giỏ hàng của bạn đang trống'),
   shipping: shippingSchema,
   note,
+  couponCode: orderCouponCode, // [F09]
   requestId: z.uuid('Mã yêu cầu không hợp lệ'),
 });
 

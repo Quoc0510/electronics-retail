@@ -1,5 +1,5 @@
 /**
- * @feature [F06][F13] Đặt hàng - Trang /dat-hang: chọn hoặc nhập địa chỉ giao hàng, xem lại sản phẩm, phí vận chuyển
+ * @feature [F06][F09][F13] Đặt hàng - Trang /dat-hang: chọn hoặc nhập địa chỉ giao hàng, xem lại sản phẩm, phí vận chuyển
  * và tổng tiền, rồi xác nhận đặt hàng thanh toán khi nhận hàng (US-16 AC1, AC2).
  *  - [F13] Không cần đăng nhập (BR-11): khách nhập địa chỉ trực tiếp, gửi giỏ lưu trên trình duyệt kèm requestId (chống đặt
  *    trùng). Đăng nhập chỉ để dùng sổ địa chỉ và tích điểm thành viên (BR-15); trang nói rõ số điểm đơn này sẽ được.
@@ -7,7 +7,9 @@
  *  - Nút xác nhận bị khóa trong lúc đang gửi nên bấm đúp không gửi hai lần (AC6; backend cũng chặn đặt trùng).
  *  - Hết hàng, sản phẩm bị ẩn hoặc không đủ số lượng: hiện danh sách sản phẩm có vấn đề kèm đường về giỏ hàng (AC4).
  *  - Đặt thành công: giỏ được làm trống ngay và chuyển tới trang đơn hàng (AC3).
- * Phí vận chuyển ở đây là ước tính theo BR-05; số cuối cùng do backend tính và trả về trên trang đơn hàng.
+ *  - [F09] Có ô nhập mã giảm giá (US-25): hiện ngay số tiền giảm, phí ship và điểm thành viên tính trên tiền hàng sau giảm
+ *    (BR-14, BR-05, BR-15). Mã đang lỗi thì không gửi kèm đơn.
+ * Phí vận chuyển và số tiền giảm ở đây là ước tính theo BR-05, BR-14; số cuối cùng do backend tính và trả về trên trang đơn hàng.
  */
 import { useEffect, useState } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
@@ -27,6 +29,8 @@ import {
   useFormState,
 } from '@techstore/shared';
 import { api, assetUrl } from '../lib/api.js';
+import CouponBox from '../components/checkout/CouponBox.jsx'; // [F09]
+import { useCouponPreview } from '../hooks/useCouponPreview.js'; // [F09]
 import { useMe } from '../hooks/useMe.js'; // [F13]
 import { clearGuestItems } from '../lib/guestCart.js'; // [F13]
 import { newRequestId, rememberGuestOrder } from '../lib/guestOrder.js'; // [F13]
@@ -87,6 +91,8 @@ export default function CheckoutPage() {
   const [problems, setProblems] = useState([]);
   // Địa chỉ đang chọn: id địa chỉ đã lưu hoặc "new"; null nghĩa là chưa chọn, dùng địa chỉ mặc định
   const [selected, setSelected] = useState(null);
+  // [F09] Mã giảm giá khách đã bấm áp dụng (chuỗi in hoa) hoặc null
+  const [couponCode, setCouponCode] = useState(null);
   // [F13] Mã của lần đặt này (khách không đăng nhập): bấm đúp hay thử lại sau khi mất mạng không tạo hai đơn
   const [requestId] = useState(newRequestId);
 
@@ -108,17 +114,21 @@ export default function CheckoutPage() {
   const defaultChoice = saved.find((a) => a.isDefault)?.id ?? saved[0]?.id ?? NEW_ADDRESS;
   const choice = selected ?? defaultChoice;
 
-  const fee = shippingFee(cart.subtotal);
-  const total = cart.subtotal + fee;
+  // [F09] Số tiền giảm xem trước; phí ship (BR-05) và điểm (BR-15) đều tính trên tiền hàng SAU giảm (BR-14)
+  const coupon = useCouponPreview(couponCode, cart.subtotal);
+  const payable = cart.subtotal - coupon.discount;
+  const fee = shippingFee(payable);
+  const total = payable + fee;
   // BR-15: điểm đơn này được khi hoàn thành (chỉ thành viên), tính theo tổng đã mua; khách coi như bắt đầu từ 0
   const { totalSpent } = useMe();
-  const points = calculatePoints(user ? totalSpent : 0, cart.subtotal);
+  const points = calculatePoints(user ? totalSpent : 0, payable);
 
   const submit = async (values) => {
     setProblems([]);
     const body =
       choice === NEW_ADDRESS ? { shipping: toShippingPayload(values) } : { addressId: choice };
     if (values.note.trim()) body.note = values.note.trim();
+    if (coupon.quote) body.couponCode = coupon.quote.code; // [F09] mã đang lỗi thì không gửi
 
     try {
       let order;
@@ -139,6 +149,8 @@ export default function CheckoutPage() {
       navigate(`/don-hang/${order.code}`, { state: { justPlaced: true }, replace: true });
     } catch (err) {
       setProblems(err.response?.data?.error?.details?.items ?? []);
+      // [F09] Mã vừa bị từ chối (hết lượt, hết hạn...): kiểm tra lại để ô mã nói đúng lý do
+      queryClient.invalidateQueries({ queryKey: ['coupon-preview'] });
       // Giỏ có thể đã thay đổi (tồn kho giảm, sản phẩm bị ẩn): tải lại để trang giỏ hiện trạng thái mới
       queryClient.invalidateQueries({ queryKey: ['cart'] });
       throw err; // để useFormState hiện thông báo lỗi chung
@@ -288,6 +300,17 @@ export default function CheckoutPage() {
               {...form.bind('note')}
             />
           </Section>
+
+          <Section step={4} title="Mã giảm giá (không bắt buộc)">
+            <CouponBox
+              appliedCode={couponCode}
+              quote={coupon.quote}
+              checking={coupon.checking}
+              error={coupon.error}
+              onApply={setCouponCode}
+              onRemove={() => setCouponCode(null)}
+            />
+          </Section>
         </div>
 
         <aside
@@ -328,6 +351,12 @@ export default function CheckoutPage() {
               <dt className="text-slate-600">Tạm tính</dt>
               <dd className="font-semibold text-slate-900">{formatVnd(cart.subtotal)}</dd>
             </div>
+            {coupon.discount > 0 && (
+              <div className="flex justify-between">
+                <dt className="text-slate-600">Mã giảm giá ({coupon.quote.code})</dt>
+                <dd className="font-semibold text-emerald-700">-{formatVnd(coupon.discount)}</dd>
+              </div>
+            )}
             <div className="flex justify-between">
               <dt className="flex items-center gap-1.5 text-slate-600">
                 <IconTruck size={15} /> Phí vận chuyển
@@ -357,7 +386,7 @@ export default function CheckoutPage() {
               <p className="rounded-xl bg-emerald-50 p-3 text-sm font-medium text-emerald-800">
                 {points > 0
                   ? `Bạn sẽ nhận ${points} điểm thành viên khi đơn hoàn thành.`
-                  : `Mua thêm ${formatVnd(amountToNextPoint(totalSpent + cart.subtotal))} nữa (tính cả đơn này) để được thêm 1 điểm thành viên.`}
+                  : `Mua thêm ${formatVnd(amountToNextPoint(totalSpent + payable))} nữa (tính cả đơn này) để được thêm 1 điểm thành viên.`}
               </p>
             ) : (
               <p className="rounded-xl bg-slate-100 p-3 text-sm text-slate-700">

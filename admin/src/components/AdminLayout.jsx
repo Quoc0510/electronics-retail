@@ -1,5 +1,5 @@
 /**
- * @feature [F01][F02][F03][F04][F07][F10] Khung chung của các trang Admin: thanh bên tối có menu và thông tin người dùng.
+ * @feature [F01][F02][F03][F04][F07][F08][F09][F10] Khung chung của các trang Admin: thanh bên tối có menu và thông tin người dùng.
  * Trên màn hình rộng thanh bên luôn hiện; trên điện thoại nó là ngăn kéo mở bằng nút menu ở thanh trên cùng.
  * Mỗi tính năng quản trị mới thêm một mục vào MENU_ITEMS.
  */
@@ -16,6 +16,7 @@ import {
   IconLogOut,
   IconMenu,
   IconStar,
+  IconTag,
   IconUsers,
   Logo,
   ThemeToggle,
@@ -29,6 +30,7 @@ const MENU_ITEMS = [
   { to: '/thuong-hieu', label: 'Thương hiệu', Icon: IconLayers }, // [F02]
   { to: '/san-pham', label: 'Sản phẩm', Icon: IconBox }, // [F03]
   { to: '/danh-gia', label: 'Đánh giá', Icon: IconStar }, // [F08]
+  { to: '/ma-giam-gia', label: 'Mã giảm giá', Icon: IconTag }, // [F09]
   { to: '/nguoi-dung', label: 'Người dùng', Icon: IconUsers }, // [F10]
 ];
 

@@ -6,6 +6,7 @@ import { Routes, Route } from 'react-router-dom';
 import AdminLayout from './components/AdminLayout.jsx';
 import ProtectedRoute from './components/ProtectedRoute.jsx';
 import BrandsPage from './pages/BrandsPage.jsx'; // [F02]
+import CouponsPage from './pages/CouponsPage.jsx'; // [F09]
 import CategoriesPage from './pages/CategoriesPage.jsx'; // [F02]
 import DashboardPage from './pages/DashboardPage.jsx';
 import LoginPage from './pages/LoginPage.jsx';
@@ -40,6 +41,8 @@ export default function App() {
           <Route path="/nguoi-dung" element={<UsersPage />} />
           {/* [F08] Quản lý đánh giá */}
           <Route path="/danh-gia" element={<ReviewsPage />} />
+          {/* [F09] Quản lý mã giảm giá */}
+          <Route path="/ma-giam-gia" element={<CouponsPage />} />
           <Route path="*" element={<NotFoundPage />} />
         </Route>
       </Route>

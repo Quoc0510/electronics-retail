@@ -1,8 +1,10 @@
 /**
- * @feature [F06][F07][F13] Đơn hàng - Đặt hàng thanh toán khi nhận hàng (US-16, BR-02 đến BR-05, BR-08, BR-12) và
+ * @feature [F06][F07][F09][F13] Đơn hàng - Đặt hàng thanh toán khi nhận hàng (US-16, BR-02 đến BR-05, BR-08, BR-12) và
  * quản lý đơn: khách xem, hủy; Admin xem, đổi trạng thái (US-17 đến US-19, BR-06, BR-07).
  * [F13] Khách không đăng nhập vẫn đặt được (đơn userId = null, tra cứu bằng mã đơn + số điện thoại, BR-11); đơn của thành viên
  * hoàn thành thì được cộng điểm thành viên (BR-15).
+ * [F09] Đơn có thể dùng một mã giảm giá (BR-14): số tiền giảm tính lại ở máy chủ trong chính transaction đặt hàng, phí ship và
+ * điểm thành viên tính trên tiền hàng sau giảm, hủy đơn thì trả lại lượt dùng mã.
  *
  * createOrder làm MỌI việc trong MỘT transaction (US-16 AC5): khóa giỏ, kiểm tra và trừ tồn kho, tạo đơn kèm các dòng
  * và lịch sử, xóa giỏ. Một bước lỗi thì tất cả được hoàn lại, nên không bao giờ có đơn mà kho chưa trừ, hay kho đã trừ mà
@@ -21,6 +23,7 @@ import { generateOrderCode } from '../lib/orderCode.js';
 import { ORDER_STATUSES, allowedNext, canTransition } from '../lib/orderStatus.js'; // [F07]
 import { calculatePoints } from '../lib/points.js'; // [F13]
 import { calculateShippingFee } from '../lib/shipping.js';
+import { redeemCoupon, releaseCoupon } from './coupon.service.js'; // [F09]
 import { AppError } from '../utils/AppError.js';
 import { isVisible, mergeDuplicates } from './cart.service.js';
 
@@ -51,7 +54,7 @@ const orderInclude = {
 // đơn khác của họ có thể hoàn thành trước. Đơn đã hoàn thành/hủy hoặc của khách vãng lai thì không còn "sẽ nhận"
 const expectedPoints = (order) =>
   order.user && ['PENDING', 'CONFIRMED', 'SHIPPING'].includes(order.status)
-    ? calculatePoints(order.user.totalSpent, order.subtotal)
+    ? calculatePoints(order.user.totalSpent, order.subtotal - order.discount)
     : 0;
 
 // Dạng trả cho client: có thành tiền từng dòng, liên kết và ảnh sản phẩm (nếu sản phẩm còn)
@@ -62,6 +65,8 @@ const toOrderDto = (order) => ({
   paymentMethod: order.paymentMethod,
   paymentStatus: order.paymentStatus,
   subtotal: order.subtotal,
+  discount: order.discount, // [F09] 0 nếu không dùng mã
+  couponCode: order.couponCode, // [F09]
   shippingFee: order.shippingFee,
   total: order.total,
   recipientName: order.recipientName,
@@ -105,10 +110,10 @@ const describeProblem = (problem) => {
 /**
  * Tạo đơn từ giỏ hàng của người dùng.
  * @param {number} userId
- * @param {{ addressId?: number, shipping?: object, note?: string }} input
+ * @param {{ addressId?: number, shipping?: object, note?: string, couponCode?: string }} input
  * @returns {Promise<object>} đơn vừa tạo
  */
-export const createOrder = async (userId, { addressId, shipping, note }) => {
+export const createOrder = async (userId, { addressId, shipping, note, couponCode }) => {
   let address = shipping;
   if (addressId !== undefined) {
     // Chỉ dùng được địa chỉ của chính mình; địa chỉ người khác trả 404 như không tồn tại
@@ -117,7 +122,7 @@ export const createOrder = async (userId, { addressId, shipping, note }) => {
   }
 
   return withOrderCodeRetry(() =>
-    prisma.$transaction((tx) => placeOrder(tx, userId, address, note)),
+    prisma.$transaction((tx) => placeOrder(tx, userId, address, note, couponCode)),
   );
 };
 
@@ -207,9 +212,13 @@ const reserveLines = async (tx, entries) => {
 };
 
 // Tạo đơn kèm các dòng và dòng lịch sử đầu tiên; userId null = đơn của khách vãng lai (BR-11)
-const insertOrder = async (tx, { userId, lines, address, note, idempotencyKey }) => {
+const insertOrder = async (tx, { userId, lines, address, note, idempotencyKey, couponCode }) => {
   const subtotal = lines.reduce((sum, line) => sum + line.unitPrice * line.quantity, 0);
-  const shippingFee = calculateShippingFee(subtotal); // BR-05
+  // [F09] Dùng mã (nếu có) NGAY trong transaction này: lỗi ở bước sau thì lượt dùng được hoàn lại cùng kho
+  const coupon = couponCode ? await redeemCoupon(tx, couponCode, subtotal) : null;
+  const discount = coupon?.discount ?? 0;
+  // BR-05, BR-14: miễn phí ship xét trên tiền hàng SAU giảm
+  const shippingFee = calculateShippingFee(subtotal - discount);
 
   const order = await tx.order.create({
     data: {
@@ -220,8 +229,11 @@ const insertOrder = async (tx, { userId, lines, address, note, idempotencyKey })
       paymentMethod: 'COD',
       paymentStatus: 'UNPAID', // BR-08
       subtotal,
+      discount,
+      couponId: coupon?.couponId,
+      couponCode: coupon?.couponCode,
       shippingFee,
-      total: subtotal + shippingFee,
+      total: subtotal - discount + shippingFee,
       recipientName: address.recipientName,
       phone: address.phone,
       shippingAddress: formatAddress(address), // BR-04
@@ -240,7 +252,7 @@ const insertOrder = async (tx, { userId, lines, address, note, idempotencyKey })
   return toOrderDto(order);
 };
 
-const placeOrder = async (tx, userId, address, note) => {
+const placeOrder = async (tx, userId, address, note, couponCode) => {
   // Khóa dòng giỏ: các lần đặt đồng thời của cùng người dùng phải xếp hàng (chống đặt trùng, AC6)
   const locked = await tx.$queryRaw`SELECT id FROM carts WHERE user_id = ${userId} FOR UPDATE`;
   if (locked.length === 0) throw new AppError(400, 'Giỏ hàng của bạn đang trống', 'EMPTY_CART');
@@ -255,7 +267,7 @@ const placeOrder = async (tx, userId, address, note) => {
   }
 
   const lines = await reserveLines(tx, cartItems);
-  const order = await insertOrder(tx, { userId, lines, address, note });
+  const order = await insertOrder(tx, { userId, lines, address, note, couponCode });
   await tx.cartItem.deleteMany({ where: { cart: { userId } } });
   return order;
 };
@@ -277,9 +289,10 @@ const findOrderByKey = async (idempotencyKey) => {
  * requestId (UNIQUE): gửi lại cùng mã thì trả đơn đã tạo, và hai request cùng mã chạy song song thì request thua bị
  * ràng buộc UNIQUE chặn (transaction hoàn lại kho) rồi trả đơn của request thắng. Đơn này không có chủ tài khoản nên không
  * được cộng điểm thành viên (BR-15).
- * @param {{ items: Array<{productId:number, quantity:number}>, shipping: object, note?: string, requestId: string }} input
+ * @param {{ items: Array<{productId:number, quantity:number}>, shipping: object, note?: string, requestId: string,
+ *   couponCode?: string }} input
  */
-export const createGuestOrder = async ({ items, shipping, note, requestId }) => {
+export const createGuestOrder = async ({ items, shipping, note, requestId, couponCode }) => {
   const replay = await findOrderByKey(requestId);
   if (replay) return replay;
 
@@ -324,6 +337,7 @@ export const createGuestOrder = async ({ items, shipping, note, requestId }) => 
           address: shipping,
           note,
           idempotencyKey: requestId,
+          couponCode,
         });
       }),
     () => findOrderByKey(requestId),
@@ -455,7 +469,8 @@ const changeStatus = async (
   { allowed, onlyFrom, deniedMessage, note, actorId, cancelReason },
 ) => {
   const [locked] = await tx.$queryRaw`
-    SELECT status, user_id AS "userId", subtotal FROM orders WHERE id = ${orderId} FOR UPDATE`;
+    SELECT status, user_id AS "userId", subtotal, discount, coupon_id AS "couponId"
+    FROM orders WHERE id = ${orderId} FOR UPDATE`;
   const from = locked.status;
 
   if (onlyFrom && !onlyFrom.includes(from)) {
@@ -481,20 +496,23 @@ const changeStatus = async (
         data: { stock: { increment: item.quantity } },
       });
     }
+    // [F09] Trả lại lượt dùng mã giảm giá của đơn (đúng một lần vì đơn đã hủy không đổi trạng thái nữa, BR-06)
+    if (locked.couponId !== null) await releaseCoupon(tx, locked.couponId);
   }
 
-  // BR-15: hoàn thành đơn của thành viên thì cộng tiền hàng vào tổng đã mua và cộng phần điểm tăng thêm, đúng một lần (dòng
+  // BR-15: hoàn thành đơn của thành viên thì cộng tiền hàng (sau giảm giá, BR-14) vào tổng đã mua và cộng phần điểm tăng thêm, đúng một lần (dòng
   // đơn đang bị khóa và luồng trạng thái chỉ cho đi tới COMPLETED một lần). Đơn khách vãng lai (user_id null) không có chủ.
   // Cộng tổng bằng một câu UPDATE nguyên tử trên dòng người dùng nên hai đơn của cùng một người hoàn thành đồng thời sẽ
   // xếp hàng chờ nhau: mỗi đơn thấy đúng tổng trước đó, không đơn nào làm mất phần lẻ của đơn kia.
   let pointsEarned = 0;
   if (toStatus === 'COMPLETED' && locked.userId !== null) {
+    const paid = locked.subtotal - locked.discount;
     const { totalSpent } = await tx.user.update({
       where: { id: locked.userId },
-      data: { totalSpent: { increment: locked.subtotal } },
+      data: { totalSpent: { increment: paid } },
       select: { totalSpent: true },
     });
-    pointsEarned = calculatePoints(totalSpent - locked.subtotal, locked.subtotal);
+    pointsEarned = calculatePoints(totalSpent - paid, paid);
     if (pointsEarned > 0) {
       await tx.user.update({
         where: { id: locked.userId },
