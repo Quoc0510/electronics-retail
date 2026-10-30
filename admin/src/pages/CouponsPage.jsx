@@ -4,6 +4,7 @@
  * Không có nút xóa: mã đã gắn vào đơn hàng chỉ được tắt. Mã không đổi được sau khi tạo vì đơn cũ đã lưu bản sao mã (BR-04).
  * Mã đang chạy bị sửa thì chỉ ảnh hưởng các đơn đặt sau đó; đơn đã đặt giữ nguyên số tiền giảm.
  * Điều kiện phụ: điểm thành viên tối thiểu và phạm vi áp dụng (sản phẩm, danh mục, thương hiệu - chọn ở CouponScopePicker).
+ * Tùy chọn "Tự động áp dụng khi thanh toán": trang đặt hàng tự điền mã giảm nhiều tiền nhất trong các mã bật cờ này (khách bỏ được).
  */
 import { useEffect, useState } from 'react';
 import { keepPreviousData, useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
@@ -62,6 +63,7 @@ const emptyForm = () => {
     endsAt: toLocalInput(now + 30 * DAY_MS),
     maxUses: '100',
     minPoints: '0',
+    autoApply: false,
     products: [],
     categoryIds: [],
     brandIds: [],
@@ -77,6 +79,7 @@ const formFromCoupon = (coupon) => ({
   endsAt: toLocalInput(coupon.endsAt),
   maxUses: String(coupon.maxUses),
   minPoints: String(coupon.minPoints),
+  autoApply: coupon.autoApply,
   products: coupon.scope.products,
   categoryIds: coupon.scope.categories.map((item) => item.id),
   brandIds: coupon.scope.brands.map((item) => item.id),
@@ -144,6 +147,9 @@ function ScopeSummary({ coupon }) {
       {coupon.minPoints > 0 && (
         <div className="text-xs text-slate-500">Từ {coupon.minPoints} điểm thành viên</div>
       )}
+      {coupon.autoApply && (
+        <div className="text-xs font-semibold text-emerald-700">Tự động áp dụng khi thanh toán</div>
+      )}
     </div>
   );
 }
@@ -162,6 +168,7 @@ function CouponForm({ coupon, onDone, onCancel }) {
       endsAt: new Date(values.endsAt).toISOString(),
       maxUses: Number(values.maxUses),
       minPoints: Number(values.minPoints),
+      autoApply: values.autoApply,
       productIds: values.products.map((product) => product.id),
       categoryIds: values.categoryIds,
       brandIds: values.brandIds,
@@ -211,6 +218,22 @@ function CouponForm({ coupon, onDone, onCancel }) {
         Điểm tối thiểu: người dùng mã phải đang có ít nhất chừng này điểm thành viên (0 = không yêu
         cầu). Khách chưa đăng nhập tính là 0 điểm.
       </p>
+      <label className="flex items-start gap-3 rounded-xl border border-slate-200 p-4 text-sm">
+        <input
+          type="checkbox"
+          checked={form.values.autoApply}
+          onChange={(event) => form.setFieldValue('autoApply', event.target.checked)}
+          className="mt-1"
+        />
+        <span>
+          <span className="block font-semibold text-slate-900">Tự động áp dụng khi thanh toán</span>
+          <span className="block text-slate-600">
+            Khách không cần nhập mã: trang đặt hàng tự điền mã giảm nhiều tiền nhất trong các mã bật
+            tùy chọn này và dùng được cho giỏ hàng. Khách vẫn bỏ mã hoặc nhập mã khác được. Không
+            bật thì khách phải tự nhập mã (dùng cho mã riêng, mã tặng khách).
+          </span>
+        </span>
+      </label>
       <CouponScopePicker
         products={form.values.products}
         categoryIds={form.values.categoryIds}

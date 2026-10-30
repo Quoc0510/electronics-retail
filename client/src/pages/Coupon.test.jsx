@@ -163,6 +163,7 @@ const openCheckout = async (subtotal = 2000000, extra = {}) => {
     'GET /cart': [200, makeCart(subtotal)],
     'GET /users/me/addresses': [200, [address]],
     'POST /coupons/preview': previewHandler,
+    'POST /coupons/auto': [200, { coupon: null }], // mặc định không có mã tự động áp dụng
     'POST /orders': [201, placedOrder],
     'GET /orders/TS261030-ABCD': [200, placedOrder],
     ...extra,
@@ -418,5 +419,203 @@ describe('Đặt hàng có mã giảm giá', () => {
     await waitFor(() => expect(calls.some((c) => c.key === 'POST /orders/guest')).toBe(true));
     const guest = calls.find((c) => c.key === 'POST /orders/guest');
     expect(guest.body.couponCode).toBe('GIAM10');
+  });
+});
+
+describe('Mã tự động áp dụng ở trang đặt hàng (US-25 AC10)', () => {
+  const autoQuote = (overrides = {}) => ({
+    code: 'TUDONG',
+    type: 'PERCENT',
+    value: 10,
+    minOrder: 0,
+    minPoints: 0,
+    scoped: false,
+    eligibleSubtotal: 2000000,
+    discount: 200000,
+    ...overrides,
+  });
+  // Xem trước của mã tự động: dùng lại hàm giả của các mã khác nhưng thêm mã TUDONG
+  const previewWithAuto = (config, body) =>
+    body.code === 'TUDONG' ? [200, autoQuote()] : previewHandler(config, body);
+
+  const openWithAuto = (coupon = autoQuote(), extra = {}) =>
+    openCheckout(2000000, {
+      'POST /coupons/auto': [200, { coupon }],
+      'POST /coupons/preview': previewWithAuto,
+      ...extra,
+    });
+
+  it('tự điền mã giảm nhiều nhất khi vào trang: hiện "tự động áp dụng", giảm giá và tổng mới', async () => {
+    const calls = await openWithAuto();
+
+    const box = await screen.findByText(/Đã tự động áp dụng mã/);
+    expect(box).toHaveTextContent('Đã tự động áp dụng mã TUDONG: giảm 200.000 ₫');
+    expect(within(summary()).getByText('Mã giảm giá (TUDONG)')).toBeInTheDocument();
+    expect(within(summary()).getByText('-200.000 ₫')).toBeInTheDocument();
+    expect(within(summary()).getByText('1.830.000 ₫')).toBeInTheDocument(); // 2.000.000 - 200.000 + 30.000
+    // Khách không phải gõ gì: chỉ gửi giỏ hàng để máy chủ tìm mã
+    const request = calls.find((call) => call.key === 'POST /coupons/auto');
+    expect(request.body).toEqual({ items: [{ productId: 101, quantity: 1 }] });
+    expect(screen.queryByLabelText('Mã giảm giá')).not.toBeInTheDocument();
+  });
+
+  it('gửi mã tự động kèm đơn khi đặt hàng', async () => {
+    const calls = await openWithAuto();
+    await screen.findByText(/Đã tự động áp dụng mã/);
+
+    await userEvent.click(screen.getByRole('button', { name: /Xác nhận đặt hàng/ }));
+    await waitFor(() => expect(orders(calls)).toHaveLength(1));
+    expect(orders(calls)[0].body).toEqual({ addressId: 2, couponCode: 'TUDONG' });
+  });
+
+  it('không có mã tự động nào: giữ nguyên ô nhập mã như trước', async () => {
+    await openWithAuto(null);
+    expect(await screen.findByLabelText('Mã giảm giá')).toHaveValue('');
+    expect(screen.queryByText(/Đã tự động áp dụng/)).not.toBeInTheDocument();
+    expect(within(summary()).getByText('2.030.000 ₫')).toBeInTheDocument();
+  });
+
+  it('khách bỏ mã thì mã bị gỡ, hiện lại ô nhập và KHÔNG bị tự điền lại', async () => {
+    const calls = await openWithAuto();
+    await userEvent.click(await screen.findByRole('button', { name: 'Bỏ mã' }));
+
+    expect(await screen.findByLabelText('Mã giảm giá')).toBeInTheDocument();
+    expect(screen.queryByText(/Đã tự động áp dụng/)).not.toBeInTheDocument();
+    expect(within(summary()).queryByText(/Mã giảm giá \(/)).not.toBeInTheDocument();
+    expect(within(summary()).getByText('2.030.000 ₫')).toBeInTheDocument();
+    // Đặt hàng sau khi bỏ mã thì không gửi mã nào
+    await userEvent.click(screen.getByRole('button', { name: /Xác nhận đặt hàng/ }));
+    await waitFor(() => expect(orders(calls)).toHaveLength(1));
+    expect(orders(calls)[0].body).toEqual({ addressId: 2 });
+  });
+
+  it('bỏ mã tự động thì mã đó vẫn được gợi ý ngay trên ô nhập, không bị mất', async () => {
+    await openWithAuto();
+    expect(screen.queryByText(/Mã dành cho bạn/)).not.toBeInTheDocument(); // đang áp thì không cần gợi ý
+    await userEvent.click(await screen.findByRole('button', { name: 'Bỏ mã' }));
+
+    const hint = await screen.findByText(/Mã dành cho bạn/);
+    expect(hint).toHaveTextContent('Mã dành cho bạn: TUDONG, giảm 200.000 ₫');
+    expect(screen.getByLabelText('Mã giảm giá')).toBeInTheDocument();
+    expect(within(summary()).queryByText(/Mã giảm giá \(/)).not.toBeInTheDocument();
+  });
+
+  it('bấm "Dùng mã này" áp lại mã vừa bỏ và đặt hàng gửi mã đó', async () => {
+    const calls = await openWithAuto();
+    await userEvent.click(await screen.findByRole('button', { name: 'Bỏ mã' }));
+    await userEvent.click(await screen.findByRole('button', { name: 'Dùng mã này' }));
+
+    expect(await screen.findByText(/Đã tự động áp dụng mã/)).toHaveTextContent('TUDONG');
+    expect(screen.queryByText(/Mã dành cho bạn/)).not.toBeInTheDocument();
+    expect(within(summary()).getByText('1.830.000 ₫')).toBeInTheDocument();
+    await userEvent.click(screen.getByRole('button', { name: /Xác nhận đặt hàng/ }));
+    await waitFor(() => expect(orders(calls)).toHaveLength(1));
+    expect(orders(calls)[0].body.couponCode).toBe('TUDONG');
+  });
+
+  it('đang dùng mã khác do khách nhập thì không gợi ý; gỡ mã đó đi thì gợi ý hiện lại', async () => {
+    await openWithAuto();
+    await userEvent.click(await screen.findByRole('button', { name: 'Bỏ mã' }));
+    await applyCode('giam500k');
+    await screen.findByText(/Đã áp dụng mã/);
+    expect(screen.queryByText(/Mã dành cho bạn/)).not.toBeInTheDocument();
+
+    await userEvent.click(screen.getByRole('button', { name: 'Bỏ mã' }));
+    expect(await screen.findByText(/Mã dành cho bạn/)).toHaveTextContent('TUDONG');
+  });
+
+  it('không có mã tự động thì không có dòng gợi ý', async () => {
+    await openWithAuto(null);
+    await screen.findByLabelText('Mã giảm giá');
+    expect(screen.queryByText(/Mã dành cho bạn/)).not.toBeInTheDocument();
+  });
+
+  it('bỏ mã tự động rồi tự nhập mã khác thì dùng mã khách nhập', async () => {
+    const calls = await openWithAuto();
+    await userEvent.click(await screen.findByRole('button', { name: 'Bỏ mã' }));
+    await applyCode('giam500k');
+
+    const box = await screen.findByText(/Đã áp dụng mã/);
+    expect(box).toHaveTextContent('Đã áp dụng mã GIAM500K: giảm 500.000 ₫'); // mã khách tự nhập, không phải "tự động"
+    expect(within(summary()).getByText('Mã giảm giá (GIAM500K)')).toBeInTheDocument();
+    await userEvent.click(screen.getByRole('button', { name: /Xác nhận đặt hàng/ }));
+    await waitFor(() => expect(orders(calls)).toHaveLength(1));
+    expect(orders(calls)[0].body.couponCode).toBe('GIAM500K');
+    // Mã tự động chỉ được hỏi một lần, không hỏi lại sau khi khách đã chọn
+    expect(calls.filter((call) => call.key === 'POST /coupons/auto')).toHaveLength(1);
+  });
+
+  it('máy chủ không trả lời được phần tự động: im lặng, vẫn nhập tay và đặt hàng bình thường', async () => {
+    const calls = await openCheckout(2000000, {
+      'POST /coupons/auto': [500, apiError('INTERNAL_ERROR', 'Máy chủ gặp sự cố')],
+    });
+
+    expect(await screen.findByLabelText('Mã giảm giá')).toBeInTheDocument();
+    expect(screen.queryByText('Máy chủ gặp sự cố')).not.toBeInTheDocument();
+    expect(screen.queryByRole('alert')).not.toBeInTheDocument();
+    await userEvent.click(screen.getByRole('button', { name: /Xác nhận đặt hàng/ }));
+    await waitFor(() => expect(orders(calls)).toHaveLength(1));
+    expect(orders(calls)[0].body).toEqual({ addressId: 2 });
+  });
+
+  it('mã tự động vừa hết lượt lúc đặt hàng: báo lỗi của máy chủ và cho khách bỏ mã hoặc đổi mã', async () => {
+    let previews = 0;
+    const calls = await openWithAuto(autoQuote(), {
+      'POST /coupons/preview': (config, body) => {
+        previews += 1;
+        return previews === 1
+          ? previewWithAuto(config, body)
+          : [400, apiError('COUPON_EXHAUSTED', 'Mã giảm giá đã hết lượt sử dụng')];
+      },
+      'POST /orders': [400, apiError('COUPON_EXHAUSTED', 'Mã giảm giá đã hết lượt sử dụng')],
+    });
+    await screen.findByText(/Đã tự động áp dụng mã/);
+    await userEvent.click(screen.getByRole('button', { name: /Xác nhận đặt hàng/ }));
+    await waitFor(() => expect(orders(calls)).toHaveLength(1));
+
+    expect((await screen.findAllByText('Mã giảm giá đã hết lượt sử dụng')).length).toBeGreaterThan(
+      0,
+    );
+    expect(screen.queryByText(/Đã tự động áp dụng/)).not.toBeInTheDocument();
+    expect(within(summary()).getByText('2.030.000 ₫')).toBeInTheDocument();
+    // Khách xóa mã lỗi để đặt tiếp không kèm mã
+    await userEvent.click(screen.getByRole('button', { name: 'Xóa mã TUDONG' }));
+    // Thông báo lỗi của ô mã biến mất; còn lại đúng một thông báo là lỗi của lần đặt hàng vừa rồi
+    expect(screen.getAllByText('Mã giảm giá đã hết lượt sử dụng')).toHaveLength(1);
+  });
+
+  it('khách chưa đăng nhập cũng được tự áp dụng và gửi mã kèm đơn khách', async () => {
+    cartSubtotal = 2000000;
+    localStorage.setItem('techstore.guestCart', JSON.stringify([{ productId: 101, quantity: 1 }]));
+    const calls = mockServer({
+      ...storefrontApi,
+      'POST /cart/preview': [200, makeCart(2000000)],
+      'POST /coupons/auto': [200, { coupon: autoQuote() }],
+      'POST /coupons/preview': previewWithAuto,
+      'POST /orders/guest': [201, { ...placedOrder, isGuest: true }],
+      'GET /orders/TS261030-ABCD': [200, placedOrder],
+      'POST /orders/lookup': [200, { ...placedOrder, isGuest: true }],
+    });
+    renderApp('/dat-hang');
+    await screen.findByRole('heading', { name: 'Đặt hàng', level: 1 });
+    // Khách vãng lai: xem trước giỏ, hỏi mã tự động rồi xem trước mã, ba lần gọi nối tiếp nên chờ lâu hơn mặc định
+    // (Mã nằm trong thẻ <strong> nên tìm theo phần chữ bên ngoài rồi kiểm tra toàn bộ nội dung)
+    expect(
+      await screen.findByText(/Đã tự động áp dụng mã/, {}, { timeout: 4000 }),
+    ).toHaveTextContent('Đã tự động áp dụng mã TUDONG');
+
+    const fields = {
+      'Tên người nhận': 'Trần Thị B',
+      'Số điện thoại người nhận': '0987654321',
+      'Tỉnh/Thành phố': 'Đà Nẵng',
+      'Phường/Xã': 'Phường Thạch Thang',
+      'Số nhà, tên đường': '99 Bạch Đằng',
+    };
+    for (const [label, value] of Object.entries(fields)) {
+      await userEvent.type(screen.getByLabelText(label), value);
+    }
+    await userEvent.click(screen.getByRole('button', { name: /Xác nhận đặt hàng/ }));
+    await waitFor(() => expect(calls.some((c) => c.key === 'POST /orders/guest')).toBe(true));
+    expect(calls.find((c) => c.key === 'POST /orders/guest').body.couponCode).toBe('TUDONG');
   });
 });

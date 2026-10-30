@@ -49,6 +49,7 @@ const fields = {
     .min(1, 'Số lượt tối đa phải từ 1')
     .max(1_000_000, 'Số lượt tối đa quá lớn'),
   isActive: z.boolean({ error: 'Trạng thái phải là true hoặc false' }),
+  autoApply: z.boolean({ error: 'Tự động áp dụng phải là true hoặc false' }),
   // Điều kiện phụ: điểm thành viên tối thiểu (0 = không yêu cầu) và phạm vi áp dụng (cả ba rỗng = mọi sản phẩm)
   minPoints: money('Điểm tối thiểu'),
   productIds: idList('sản phẩm'),
@@ -65,6 +66,7 @@ export const createCouponSchema = z.object({
   endsAt: fields.endsAt,
   maxUses: fields.maxUses,
   isActive: fields.isActive.default(true),
+  autoApply: fields.autoApply.default(false),
   minPoints: fields.minPoints.default(0),
   productIds: fields.productIds.default([]),
   categoryIds: fields.categoryIds.default([]),
@@ -81,6 +83,7 @@ export const updateCouponSchema = z
     endsAt: fields.endsAt.optional(),
     maxUses: fields.maxUses.optional(),
     isActive: fields.isActive.optional(),
+    autoApply: fields.autoApply.optional(),
     minPoints: fields.minPoints.optional(),
     productIds: fields.productIds.optional(),
     categoryIds: fields.categoryIds.optional(),
@@ -93,6 +96,11 @@ export const updateCouponSchema = z
 // US-25: giỏ hàng hiện tại của khách (chỉ để xem trước; máy chủ tự lấy giá từ CSDL và đặt hàng tính lại từ giỏ thật)
 export const previewCouponSchema = z.object({
   code: couponCode,
+  items: guestCartSchema.shape.items.min(1, 'Giỏ hàng đang trống'),
+});
+
+// US-25 AC10: chỉ cần giỏ hàng, không có mã (máy chủ tự tìm mã phù hợp)
+export const autoCouponSchema = z.object({
   items: guestCartSchema.shape.items.min(1, 'Giỏ hàng đang trống'),
 });
 

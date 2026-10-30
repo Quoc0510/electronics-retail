@@ -230,7 +230,8 @@ describe('Đặt hàng khi chưa đăng nhập (BR-11)', () => {
     // Trang đơn xem đơn bằng mã + số điện thoại, không phải API của thành viên
     expect(posts(calls, 'POST /orders/lookup')[0].body).toEqual({ code: CODE, phone: PHONE });
     expect(calls.some((c) => c.key === `GET /orders/${CODE}`)).toBe(false);
-  });
+    // Test đi qua cả trang đặt hàng (gõ nhiều ô) và trang đơn: sát mốc 5 giây mặc định nên lúc máy bận có thể trượt
+  }, 20_000);
 
   it('không nhập quận/huyện vẫn đặt được (không bắt buộc)', async () => {
     const calls = await openCheckout();

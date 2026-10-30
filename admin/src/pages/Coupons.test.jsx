@@ -21,6 +21,7 @@ const coupon = (id, overrides = {}) => ({
   isActive: true,
   state: 'RUNNING',
   minPoints: 0,
+  autoApply: false,
   scoped: false,
   scope: { products: [], categories: [], brands: [] },
   createdAt: '2026-10-01T03:00:00.000Z',
@@ -465,5 +466,66 @@ describe('Điều kiện phụ: điểm tối thiểu và phạm vi áp dụng (
     await userEvent.click(screen.getByRole('button', { name: 'Tạo mã' }));
 
     expect(await screen.findByText('Có sản phẩm được chọn không tồn tại')).toBeInTheDocument();
+  });
+});
+
+describe('Tự động áp dụng khi thanh toán (US-24)', () => {
+  const autoCoupon = coupon(8, { code: 'TUDONG', autoApply: true });
+  const checkbox = () => screen.getByRole('checkbox', { name: /Tự động áp dụng khi thanh toán/ });
+
+  it('bảng đánh dấu mã tự động áp dụng; mã thường thì không', async () => {
+    open({ 'GET /admin/coupons': [200, listPage([coupon(1), autoCoupon])] });
+
+    expect(
+      within(await rowOf('TUDONG')).getByText('Tự động áp dụng khi thanh toán'),
+    ).toBeInTheDocument();
+    expect(
+      within(await rowOf('MA1')).queryByText('Tự động áp dụng khi thanh toán'),
+    ).not.toBeInTheDocument();
+  });
+
+  it('tạo mã: mặc định không tick và gửi autoApply=false', async () => {
+    const { calls } = open({ 'POST /admin/coupons': [201, coupon(9)] });
+    await screen.findByRole('table');
+    await userEvent.click(screen.getByRole('button', { name: /Thêm mã giảm giá/ }));
+
+    expect(checkbox()).not.toBeChecked();
+    await fill('Mã giảm giá', 'THUONG');
+    await fill('Mức giảm (%)', '10');
+    await userEvent.click(screen.getByRole('button', { name: 'Tạo mã' }));
+
+    await waitFor(() => expect(calls.some((c) => c.key === 'POST /admin/coupons')).toBe(true));
+    expect(calls.find((c) => c.key === 'POST /admin/coupons').body.autoApply).toBe(false);
+  });
+
+  it('tạo mã: tick thì gửi autoApply=true', async () => {
+    const { calls } = open({ 'POST /admin/coupons': [201, autoCoupon] });
+    await screen.findByRole('table');
+    await userEvent.click(screen.getByRole('button', { name: /Thêm mã giảm giá/ }));
+    await fill('Mã giảm giá', 'TUDONG');
+    await fill('Mức giảm (%)', '10');
+    await userEvent.click(checkbox());
+    expect(checkbox()).toBeChecked();
+    await userEvent.click(screen.getByRole('button', { name: 'Tạo mã' }));
+
+    await waitFor(() => expect(calls.some((c) => c.key === 'POST /admin/coupons')).toBe(true));
+    expect(calls.find((c) => c.key === 'POST /admin/coupons').body.autoApply).toBe(true);
+  });
+
+  it('sửa mã: điền sẵn trạng thái hiện có, bỏ tick rồi lưu gửi autoApply=false', async () => {
+    const { calls } = open({
+      'GET /admin/coupons': [200, listPage([autoCoupon])],
+      'PATCH /admin/coupons/8': [200, coupon(8, { code: 'TUDONG' })],
+    });
+    await userEvent.click(
+      await within(await rowOf('TUDONG')).findByRole('button', { name: 'Sửa mã TUDONG' }),
+    );
+
+    expect(checkbox()).toBeChecked();
+    await userEvent.click(checkbox());
+    await userEvent.click(screen.getByRole('button', { name: 'Lưu thay đổi' }));
+
+    await waitFor(() => expect(calls.some((c) => c.key === 'PATCH /admin/coupons/8')).toBe(true));
+    expect(calls.find((c) => c.key === 'PATCH /admin/coupons/8').body.autoApply).toBe(false);
   });
 });

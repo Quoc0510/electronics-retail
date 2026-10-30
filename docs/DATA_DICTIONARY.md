@@ -132,4 +132,5 @@ Phục vụ rubric TC2.1. Nguồn sự thật là [schema.prisma](../backend/pri
 | used_count                           | int         | 0 đến max_uses, mặc định 0             | Số lượt đã dùng (đơn hủy được trả lại lượt)                                                                           |
 | is_active                            | bool        | mặc định true                          | Bật/tắt mã (US-24 AC2)                                                                                                |
 | min_points                           | int         | >= 0, mặc định 0                       | Điểm thành viên tối thiểu để dùng mã (khách chưa đăng nhập tính là 0 điểm)                                            |
+| auto_apply                           | bool        | mặc định false                         | Tự động áp dụng ở trang đặt hàng: trong các mã bật cờ và dùng được cho giỏ, chọn mã giảm nhiều tiền nhất (US-25 AC10) |
 | product_ids, category_ids, brand_ids | int[]       | mỗi danh sách tối đa 50, mặc định rỗng | Phạm vi áp dụng, là hợp của ba danh sách; cả ba rỗng = mọi sản phẩm. Không có khóa ngoại: id đã xóa chỉ không khớp ai |

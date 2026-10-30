@@ -9,6 +9,8 @@
  *  - Đặt thành công: giỏ được làm trống ngay và chuyển tới trang đơn hàng (AC3).
  *  - [F09] Có ô nhập mã giảm giá (US-25): hiện ngay số tiền giảm, phí ship và điểm thành viên tính trên tiền hàng sau giảm
  *    (BR-14, BR-05, BR-15). Mã đang lỗi thì không gửi kèm đơn.
+ *    Có mã Admin bật "tự động áp dụng" dùng được cho giỏ hàng này thì trang tự điền mã giảm nhiều tiền nhất (US-25 AC10); khách
+ *    bỏ mã hoặc tự nhập mã khác thì không bị tự điền lại.
  * Phí vận chuyển và số tiền giảm ở đây là ước tính theo BR-05, BR-14; số cuối cùng do backend tính và trả về trên trang đơn hàng.
  */
 import { useEffect, useState } from 'react';
@@ -30,6 +32,7 @@ import {
 } from '@techstore/shared';
 import { api, assetUrl } from '../lib/api.js';
 import CouponBox from '../components/checkout/CouponBox.jsx'; // [F09]
+import { useAutoCoupon } from '../hooks/useAutoCoupon.js'; // [F09]
 import { useCouponPreview } from '../hooks/useCouponPreview.js'; // [F09]
 import { useMe } from '../hooks/useMe.js'; // [F13]
 import { clearGuestItems } from '../lib/guestCart.js'; // [F13]
@@ -93,6 +96,8 @@ export default function CheckoutPage() {
   const [selected, setSelected] = useState(null);
   // [F09] Mã giảm giá khách đã bấm áp dụng (chuỗi in hoa) hoặc null
   const [couponCode, setCouponCode] = useState(null);
+  // [F09] Khách đã bỏ mã tự động áp dụng: không tự điền lại nữa (khách quyết định, không bị gán mã ngoài ý muốn)
+  const [autoDismissed, setAutoDismissed] = useState(false);
   // [F13] Mã của lần đặt này (khách không đăng nhập): bấm đúp hay thử lại sau khi mất mạng không tạo hai đơn
   const [requestId] = useState(newRequestId);
 
@@ -115,7 +120,14 @@ export default function CheckoutPage() {
   const choice = selected ?? defaultChoice;
 
   // [F09] Số tiền giảm xem trước; phí ship (BR-05) và điểm (BR-15) đều tính trên tiền hàng SAU giảm (BR-14)
-  const coupon = useCouponPreview(couponCode, cart.items, user?.id ?? null);
+  // Mã khách tự nhập luôn được ưu tiên; chưa nhập và chưa bỏ thì dùng mã tự động áp dụng (US-25 AC10)
+  // Vẫn hỏi cả khi khách đã bỏ mã tự động để còn gợi ý lại mã đó (không để khách mất mã); chỉ ngừng khi khách đã có mã riêng
+  const autoCoupon = useAutoCoupon(cart.items, user?.id ?? null, !couponCode && cart.canCheckout);
+  const autoApplied = !couponCode && !autoDismissed && Boolean(autoCoupon.code);
+  const appliedCode = couponCode ?? (autoApplied ? autoCoupon.code : null);
+  // Chưa có mã nào đang áp mà có mã tự động dùng được (khách vừa bỏ, hoặc đổi ý): hiện lại để áp bằng một lần bấm
+  const suggestion = !appliedCode ? autoCoupon.quote : null;
+  const coupon = useCouponPreview(appliedCode, cart.items, user?.id ?? null);
   const payable = cart.subtotal - coupon.discount;
   const fee = shippingFee(payable);
   const total = payable + fee;
@@ -303,12 +315,21 @@ export default function CheckoutPage() {
 
           <Section step={4} title="Mã giảm giá (không bắt buộc)">
             <CouponBox
-              appliedCode={couponCode}
+              appliedCode={appliedCode}
+              auto={autoApplied}
               quote={coupon.quote}
               checking={coupon.checking}
               error={coupon.error}
+              suggestion={suggestion}
+              onRestoreSuggestion={() => {
+                setCouponCode(null);
+                setAutoDismissed(false);
+              }}
               onApply={setCouponCode}
-              onRemove={() => setCouponCode(null)}
+              onRemove={() => {
+                setCouponCode(null);
+                setAutoDismissed(true);
+              }}
             />
           </Section>
         </div>

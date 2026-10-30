@@ -9,6 +9,15 @@ export const preview = asyncHandler(async (req, res) => {
   res.json(await couponService.previewCoupon(code, items, req.user?.id ?? null));
 });
 
+// Mã tự động áp dụng cho giỏ hàng: luôn 200, `coupon` là null khi không có mã nào hợp
+export const auto = asyncHandler(async (req, res) => {
+  const coupon = await couponService.suggestAutoCoupon(
+    req.validated.body.items,
+    req.user?.id ?? null,
+  );
+  res.json({ coupon });
+});
+
 export const list = asyncHandler(async (req, res) => {
   res.json(await couponService.listCoupons(req.validated.query));
 });

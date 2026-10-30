@@ -101,22 +101,16 @@ const pointsOf = async (db, userId) => {
   return user?.points ?? 0;
 };
 
-/**
- * US-25 AC1, AC2: xem trước số tiền giảm của một mã cho giỏ hàng `items` ({ productId, quantity }); không giữ chỗ lượt dùng.
- * Giá lấy từ CSDL (không tin giá Client gửi) nên số xem trước khớp với số đặt hàng sẽ tính.
- * @param {number|null} userId người đang đăng nhập (để kiểm tra điểm tối thiểu) hoặc null
- */
-export const previewCoupon = async (code, items, userId = null) => {
-  const coupon = await prisma.coupon.findUnique({ where: { code } });
-  if (!coupon) throw notFound();
-
+// Giỏ hàng gửi lên ({ productId, quantity }) -> các dòng có giá, danh mục, thương hiệu LẤY TỪ CSDL (không tin giá Client gửi);
+// sản phẩm đã ẩn hoặc không còn thì bị bỏ qua
+const loadLines = async (items) => {
   const requested = mergeDuplicates(items);
   const products = await prisma.product.findMany({
     where: { id: { in: requested.map((entry) => entry.productId) }, ...visibleProductWhere },
     select: { id: true, price: true, salePrice: true, categoryId: true, brandId: true },
   });
   const byId = new Map(products.map((product) => [product.id, product]));
-  const lines = requested
+  return requested
     .filter((entry) => byId.has(entry.productId))
     .map((entry) => {
       const product = byId.get(entry.productId);
@@ -128,9 +122,64 @@ export const previewCoupon = async (code, items, userId = null) => {
         quantity: entry.quantity,
       };
     });
+};
 
+/**
+ * US-25 AC1, AC2: xem trước số tiền giảm của một mã cho giỏ hàng `items` ({ productId, quantity }); không giữ chỗ lượt dùng.
+ * Giá lấy từ CSDL (không tin giá Client gửi) nên số xem trước khớp với số đặt hàng sẽ tính.
+ * @param {number|null} userId người đang đăng nhập (để kiểm tra điểm tối thiểu) hoặc null
+ */
+export const previewCoupon = async (code, items, userId = null) => {
+  const coupon = await prisma.coupon.findUnique({ where: { code } });
+  if (!coupon) throw notFound();
+
+  const lines = await loadLines(items);
   const eligibleSubtotal = assertUsable(coupon, lines, await pointsOf(prisma, userId), new Date());
   return toQuote(coupon, eligibleSubtotal);
+};
+
+/**
+ * US-25 AC10: mã được tự động áp dụng cho giỏ hàng ở bước thanh toán, hoặc null nếu không có mã nào.
+ * Chỉ xét các mã Admin bật "tự động áp dụng" (mã không bật phải nhập tay) và đang dùng được cho đúng giỏ hàng và đúng người
+ * này (hiệu lực, lượt dùng, điểm tối thiểu, phạm vi, đơn tối thiểu: cùng hàm kiểm tra với xem trước và đặt hàng). Trong các
+ * mã dùng được chọn mã GIẢM NHIỀU TIỀN NHẤT; bằng nhau thì chọn mã hết hạn sớm hơn (để khách không bỏ lỡ), rồi mã tạo trước.
+ * Chỉ là gợi ý để Client điền sẵn mã: không giữ chỗ lượt dùng, đặt hàng vẫn kiểm tra lại mã như thường.
+ * @param {number|null} userId người đang đăng nhập hoặc null (khách)
+ */
+export const suggestAutoCoupon = async (items, userId = null) => {
+  const now = new Date();
+  const candidates = await prisma.coupon.findMany({
+    where: {
+      autoApply: true,
+      isActive: true,
+      startsAt: { lte: now },
+      endsAt: { gt: now },
+    },
+  });
+  if (candidates.length === 0) return null;
+
+  const lines = await loadLines(items);
+  const points = await pointsOf(prisma, userId);
+  const usable = [];
+  for (const coupon of candidates) {
+    try {
+      const eligibleSubtotal = assertUsable(coupon, lines, points, now);
+      usable.push({
+        coupon,
+        discount: calculateDiscount(coupon, eligibleSubtotal),
+        eligibleSubtotal,
+      });
+    } catch (error) {
+      if (!(error instanceof AppError)) throw error; // mã không dùng được cho giỏ này thì bỏ qua, lỗi hệ thống thì báo
+    }
+  }
+  const best = usable
+    .filter((entry) => entry.discount > 0)
+    .sort(
+      (a, b) =>
+        b.discount - a.discount || a.coupon.endsAt - b.coupon.endsAt || a.coupon.id - b.coupon.id,
+    )[0];
+  return best ? toQuote(best.coupon, best.eligibleSubtotal) : null;
 };
 
 /**
@@ -200,6 +249,7 @@ const toAdminCoupon = (coupon, names, now = new Date()) => ({
   value: coupon.value,
   minOrder: coupon.minOrder,
   minPoints: coupon.minPoints,
+  autoApply: coupon.autoApply,
   startsAt: coupon.startsAt,
   endsAt: coupon.endsAt,
   maxUses: coupon.maxUses,
