@@ -19,6 +19,8 @@ export const COLUMNS = [
   { key: 'description', header: 'Mô tả', width: 40 },
   { key: 'specs', header: 'Thông số', width: 40 },
   { key: 'isActive', header: 'Hiển thị', width: 10 },
+  // [F16] Cột cuối để các file mẫu cũ (không có cột này) vẫn nhập được; ô trống = 500 g khi thêm mới, giữ nguyên khi cập nhật
+  { key: 'weightGrams', header: 'Cân nặng (g)', width: 14 },
 ];
 
 /** Cột bắt buộc phải CÓ trong file theo chế độ: thêm mới cần đủ thông tin cốt lõi, cập nhật chỉ cần SKU để nhận diện. */

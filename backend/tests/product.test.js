@@ -552,3 +552,62 @@ describe('xóa (US-09 AC2, BR-09)', () => {
     expect(res.status).toBe(404);
   });
 });
+
+// ---------------------------------------------------------------------------
+// [F16] Cân nặng sản phẩm (gram) để Giao Hàng Nhanh tính phí
+// ---------------------------------------------------------------------------
+describe('Cân nặng sản phẩm [F16]', () => {
+  const body = (parents, extra = {}) => ({
+    sku: 'CAN-1',
+    name: 'Sản phẩm có cân nặng',
+    price: 1000000,
+    ...parents,
+    ...extra,
+  });
+
+  it('không gửi cân nặng thì mặc định 500 g; có gửi thì lưu đúng', async () => {
+    const auth = await adminAuth();
+    const parents = await createParents();
+
+    const byDefault = await request(app).post(url).set(auth).send(body(parents));
+    const explicit = await request(app)
+      .post(url)
+      .set(auth)
+      .send(body(parents, { sku: 'CAN-2', weightGrams: 1250 }));
+
+    expect(byDefault.status).toBe(201);
+    expect(byDefault.body.weightGrams).toBe(500);
+    expect(explicit.body.weightGrams).toBe(1250);
+  });
+
+  it.each([0, -5, 50001, 12.5, 'nặng'])('từ chối cân nặng không hợp lệ: %s', async (value) => {
+    const auth = await adminAuth();
+    const parents = await createParents();
+
+    const res = await request(app)
+      .post(url)
+      .set(auth)
+      .send(body(parents, { weightGrams: value }));
+
+    expect(res.status).toBe(400);
+    expect(res.body.error.details.weightGrams).toBeDefined();
+  });
+
+  it('sửa được cân nặng, và CSDL cũng chặn giá trị ngoài 1 - 50.000', async () => {
+    const auth = await adminAuth();
+    const parents = await createParents();
+    const created = await request(app).post(url).set(auth).send(body(parents));
+
+    const updated = await request(app)
+      .patch(`${url}/${created.body.id}`)
+      .set(auth)
+      .send({ weightGrams: 2000 });
+    const direct = prisma.product.update({
+      where: { id: created.body.id },
+      data: { weightGrams: 0 },
+    });
+
+    expect(updated.body.weightGrams).toBe(2000);
+    await expect(direct).rejects.toThrow();
+  });
+});

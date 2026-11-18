@@ -33,6 +33,13 @@ export default defineConfig({
       GUEST_ORDER_RATE_LIMIT: '1000',
       ORDER_LOOKUP_RATE_LIMIT: '1000',
       COUPON_RATE_LIMIT: '1000',
+      SHIPPING_RATE_LIMIT: '1000',
+      // [F16] Test không bao giờ gọi GHN thật, kể cả khi backend/.env của máy dev có Token (biến ở đây thắng .env)
+      GHN_TOKEN: '',
+      GHN_SHOP_ID: '',
+      // Ngưỡng miễn phí và phí dự phòng cũng cố định, để test không đổi kết quả theo backend/.env của từng máy
+      SHIPPING_FREE_THRESHOLD: '5000000',
+      SHIPPING_FALLBACK_FEE: '30000',
       UPLOAD_DIR: TEST_UPLOAD_DIR,
     },
     coverage: {

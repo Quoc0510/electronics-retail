@@ -1,9 +1,18 @@
 /**
- * @feature [F06] Đặt hàng - Phí vận chuyển (BR-05): cố định 30.000 đ, miễn phí khi tổng tiền hàng từ 5.000.000 đ.
- * Giá trị này do backend tính khi tạo đơn (nguồn sự thật); giỏ hàng ở Client chỉ hiển thị ước tính theo cùng quy tắc.
+ * @feature [F06][F16] Đặt hàng - Quy tắc phí vận chuyển (BR-05).
+ * Phí gốc do Giao Hàng Nhanh tính theo địa chỉ và cân nặng (F16); chưa bật GHN hoặc GHN không trả lời được thì dùng phí cố
+ * định SHIPPING_FALLBACK_FEE (mặc định 30.000 đ). Tiền hàng SAU giảm giá từ SHIPPING_FREE_THRESHOLD (mặc định 5.000.000 đ)
+ * thì miễn phí (cửa hàng chịu phí GHN). Giá trị này do backend tính khi tạo đơn (nguồn sự thật); Client chỉ hiển thị ước tính.
  */
-export const SHIPPING_FEE = 30000;
-export const FREE_SHIPPING_THRESHOLD = 5000000;
+import { env } from '../config/env.js';
 
+/** Áp quy tắc miễn phí lên phí gốc; threshold 0 nghĩa là không miễn phí cho đơn nào. */
+export const applyFreeShipping = (
+  baseFee,
+  amountAfterDiscount,
+  threshold = env.SHIPPING_FREE_THRESHOLD,
+) => (threshold > 0 && amountAfterDiscount >= threshold ? 0 : baseFee);
+
+/** Phí cố định (không qua GHN) cho một mức tiền hàng. */
 export const calculateShippingFee = (subtotal) =>
-  subtotal >= FREE_SHIPPING_THRESHOLD ? 0 : SHIPPING_FEE;
+  applyFreeShipping(env.SHIPPING_FALLBACK_FEE, subtotal);

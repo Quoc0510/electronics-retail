@@ -115,7 +115,7 @@ test.describe('Nhập sản phẩm từ Excel', () => {
       .first()
       .click();
     await expect(page.getByRole('heading', { level: 1, name: good.name })).toBeVisible();
-    await expect(page.getByText('990.000 ₫').first()).toBeVisible(); // giá khuyến mãi từ file
+    await expect(page.getByText('990.000 ₫', { exact: true }).first()).toBeVisible(); // giá khuyến mãi từ file
   });
 
   test('cập nhật: sửa giá bằng Excel, ô trống giữ nguyên, SKU lạ bị bỏ qua', async ({ page }) => {
@@ -148,7 +148,8 @@ test.describe('Nhập sản phẩm từ Excel', () => {
       .first()
       .click();
     await expect(page.getByText('790.000 ₫').first()).toBeVisible();
-    await expect(page.getByText('990.000 ₫')).toHaveCount(0);
+    // exact: chuỗi con "990.000 ₫" cũng nằm trong "6.990.000 ₫" của sản phẩm cùng danh mục hiện ở cuối trang (chỉ lộ khi hệ thống mới dựng, ít sản phẩm)
+    await expect(page.getByText('990.000 ₫', { exact: true })).toHaveCount(0);
   });
 });
 

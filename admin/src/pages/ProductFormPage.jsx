@@ -1,5 +1,5 @@
 /**
- * @feature [F03] Sản phẩm - Trang thêm mới và sửa sản phẩm (US-08).
+ * @feature [F03][F16] Sản phẩm - Trang thêm mới và sửa sản phẩm (US-08).
  *  - /san-pham/them : thêm mới. Tạo xong chuyển sang trang sửa để thêm ảnh (ảnh cần có id sản phẩm).
  *  - /san-pham/:id  : sửa thông tin và quản lý ảnh.
  */
@@ -45,6 +45,11 @@ const validate = (values) => {
     }
   }
   if (!/^\d+$/.test(values.stock.trim())) errors.stock = 'Tồn kho phải là số nguyên không âm';
+  // [F16] Cân nặng để Giao Hàng Nhanh tính phí: 1 - 50.000 gram (khớp backend)
+  const weight = values.weightGrams.trim();
+  if (!/^\d+$/.test(weight) || Number(weight) < 1 || Number(weight) > 50000) {
+    errors.weightGrams = 'Cân nặng phải là số nguyên từ 1 đến 50.000 gram';
+  }
 
   // Dòng trống hoàn toàn thì bỏ qua; dòng có giá trị mà thiếu tên, hoặc tên trùng nhau là lỗi
   const filled = values.specs.filter((row) => row.name.trim() || row.value.trim());
@@ -63,6 +68,7 @@ const toPayload = (values) => ({
   price: Number(values.price),
   salePrice: values.salePrice.trim() ? Number(values.salePrice) : null,
   stock: Number(values.stock),
+  weightGrams: Number(values.weightGrams),
   description: values.description.trim(),
   specs: Object.fromEntries(
     values.specs.filter((row) => row.name.trim()).map((row) => [row.name.trim(), row.value.trim()]),
@@ -85,6 +91,7 @@ function ProductForm({ product, categories, brands }) {
     price: product ? String(product.price) : '',
     salePrice: product?.salePrice ? String(product.salePrice) : '',
     stock: product ? String(product.stock) : '0',
+    weightGrams: String(product?.weightGrams ?? 500),
     description: product?.description ?? '',
     specs: specsToRows(product?.specs),
     isActive: product?.isActive ?? true,
@@ -139,6 +146,14 @@ function ProductForm({ product, categories, brands }) {
           {...form.bind('salePrice')}
         />
         <FormField label="Tồn kho" type="number" min="0" step="1" {...form.bind('stock')} />
+        <FormField
+          label="Cân nặng (gram, gồm bao bì)"
+          type="number"
+          min="1"
+          max="50000"
+          step="1"
+          {...form.bind('weightGrams')}
+        />
       </div>
 
       <FormField label="Mô tả" multiline rows={5} {...form.bind('description')} />

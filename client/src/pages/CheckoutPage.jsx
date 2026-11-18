@@ -1,5 +1,5 @@
 /**
- * @feature [F06][F09][F13] Đặt hàng - Trang /dat-hang: chọn hoặc nhập địa chỉ giao hàng, xem lại sản phẩm, phí vận chuyển
+ * @feature [F06][F09][F13][F16] Đặt hàng - Trang /dat-hang: chọn hoặc nhập địa chỉ giao hàng, xem lại sản phẩm, phí vận chuyển
  * và tổng tiền, rồi xác nhận đặt hàng thanh toán khi nhận hàng (US-16 AC1, AC2).
  *  - [F13] Không cần đăng nhập (BR-11): khách nhập địa chỉ trực tiếp, gửi giỏ lưu trên trình duyệt kèm requestId (chống đặt
  *    trùng). Đăng nhập chỉ để dùng sổ địa chỉ và tích điểm thành viên (BR-15); trang nói rõ số điểm đơn này sẽ được.
@@ -11,6 +11,9 @@
  *    (BR-14, BR-05, BR-15). Mã đang lỗi thì không gửi kèm đơn.
  *    Có mã Admin bật "tự động áp dụng" dùng được cho giỏ hàng này thì trang tự điền mã giảm nhiều tiền nhất (US-25 AC10); khách
  *    bỏ mã hoặc tự nhập mã khác thì không bị tự điền lại.
+ *  - [F16] Cửa hàng bật Giao Hàng Nhanh: tỉnh/thành và phường/xã là ô chọn theo danh mục GHN, phí vận chuyển lấy từ GHN theo địa
+ *    chỉ và cân nặng giỏ hàng (miễn phí khi tiền hàng sau giảm đạt ngưỡng của cửa hàng). GHN không giao tới địa chỉ thì báo ngay
+ *    và khóa nút đặt; GHN sự cố thì tính phí cố định và ghi "ước tính" để khách vẫn đặt được.
  * Phí vận chuyển và số tiền giảm ở đây là ước tính theo BR-05, BR-14; số cuối cùng do backend tính và trả về trên trang đơn hàng.
  */
 import { useEffect, useState } from 'react';
@@ -38,7 +41,9 @@ import { useMe } from '../hooks/useMe.js'; // [F13]
 import { clearGuestItems } from '../lib/guestCart.js'; // [F13]
 import { newRequestId, rememberGuestOrder } from '../lib/guestOrder.js'; // [F13]
 import { EMPTY_ADDRESS, toShippingPayload, validateAddress } from '../lib/addressValidation.js';
-import { shippingFee } from '../lib/shipping.js';
+import { applyFreeShipping, shippingFee } from '../lib/shipping.js';
+import AddressFields from '../components/checkout/AddressFields.jsx'; // [F16]
+import { useShippingConfig, useShippingQuote } from '../hooks/useShipping.js'; // [F16]
 import { useAuth } from '../context/AuthContext.jsx';
 import { EMPTY_CART, useCart } from '../hooks/useCart.js';
 
@@ -129,8 +134,27 @@ export default function CheckoutPage() {
   const suggestion = !appliedCode ? autoCoupon.quote : null;
   const coupon = useCouponPreview(appliedCode, cart.items, user?.id ?? null);
   const payable = cart.subtotal - coupon.discount;
-  const fee = shippingFee(payable);
-  const total = payable + fee;
+
+  // [F16] Phí vận chuyển: cố định (chưa bật GHN) hoặc lấy từ GHN theo địa chỉ đang chọn (phí gốc rồi xét miễn phí trên tiền hàng sau giảm)
+  const shippingConfig = useShippingConfig();
+  const isGhn = shippingConfig.provider === 'GHN';
+  const target =
+    choice === NEW_ADDRESS
+      ? { province: form.values.province.trim(), ward: form.values.ward.trim() }
+      : (saved.find((address) => address.id === choice) ?? {});
+  const shipQuote = useShippingQuote({
+    items: cart.items,
+    province: target.province,
+    ward: target.ward,
+    enabled: isGhn && cart.canCheckout,
+  });
+  const fee = !isGhn
+    ? shippingFee(payable, shippingConfig)
+    : shipQuote.quote
+      ? applyFreeShipping(shipQuote.quote.fee, payable, shippingConfig.freeThreshold)
+      : null; // chưa biết: chưa chọn địa chỉ, đang tính hoặc GHN không giao tới
+  const shippingBlocked = isGhn && (shipQuote.loading || Boolean(shipQuote.error));
+  const total = payable + (fee ?? 0);
   // BR-15: điểm đơn này được khi hoàn thành (chỉ thành viên), tính theo tổng đã mua; khách coi như bắt đầu từ 0
   const { totalSpent } = useMe();
   const points = calculatePoints(user ? totalSpent : 0, payable);
@@ -280,10 +304,7 @@ export default function CheckoutPage() {
               <div className="grid gap-4 sm:grid-cols-2">
                 <FormField label="Tên người nhận" {...form.bind('recipientName')} />
                 <FormField label="Số điện thoại người nhận" type="tel" {...form.bind('phone')} />
-                <FormField label="Tỉnh/Thành phố" {...form.bind('province')} />
-                <FormField label="Quận/Huyện (nếu có)" {...form.bind('district')} />
-                <FormField label="Phường/Xã" {...form.bind('ward')} />
-                <FormField label="Số nhà, tên đường" {...form.bind('street')} />
+                <AddressFields form={form} provider={shippingConfig.provider} />
               </div>
             )}
           </Section>
@@ -383,7 +404,18 @@ export default function CheckoutPage() {
                 <IconTruck size={15} /> Phí vận chuyển
               </dt>
               <dd className="font-semibold text-slate-900">
-                {fee === 0 ? 'Miễn phí' : formatVnd(fee)}
+                {fee === null
+                  ? shipQuote.loading
+                    ? 'Đang tính...'
+                    : shipQuote.error
+                      ? 'Không giao được'
+                      : 'Chọn địa chỉ để tính'
+                  : fee === 0
+                    ? 'Miễn phí'
+                    : formatVnd(fee)}
+                {fee !== null && shipQuote.quote?.source === 'FALLBACK' && (
+                  <span className="ml-1 text-xs font-normal text-slate-500">(ước tính)</span>
+                )}
               </dd>
             </div>
             <div className="flex justify-between border-t border-slate-200 pt-3 text-base">
@@ -391,6 +423,12 @@ export default function CheckoutPage() {
               <dd className="font-display text-xl font-bold text-rose-600">{formatVnd(total)}</dd>
             </div>
           </dl>
+
+          {shipQuote.error && (
+            <p role="alert" className="text-sm font-medium text-rose-600">
+              {getErrorMessage(shipQuote.error)}
+            </p>
+          )}
 
           {!cart.canCheckout && (
             <p role="status" className="text-sm font-medium text-rose-600">
@@ -452,7 +490,7 @@ export default function CheckoutPage() {
             size="lg"
             className="w-full"
             loading={form.submitting}
-            disabled={!cart.canCheckout}
+            disabled={!cart.canCheckout || shippingBlocked}
           >
             <IconCheckCircle size={20} />
             Xác nhận đặt hàng

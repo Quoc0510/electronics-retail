@@ -39,6 +39,12 @@ services:
       GUEST_ORDER_RATE_LIMIT: ${GUEST_ORDER_RATE_LIMIT:-10}
       ORDER_LOOKUP_RATE_LIMIT: ${ORDER_LOOKUP_RATE_LIMIT:-20}
       COUPON_RATE_LIMIT: ${COUPON_RATE_LIMIT:-30}
+      # [F16] Giao Hàng Nhanh: để trống thì dùng phí vận chuyển cố định. Hệ thống kiểm thử E2E (e2e/stack.mjs) luôn để trống
+      GHN_TOKEN: ${GHN_TOKEN:-}
+      GHN_SHOP_ID: ${GHN_SHOP_ID:-}
+      GHN_API_URL: ${GHN_API_URL:-https://dev-online-gateway.ghn.vn}
+      SHIPPING_FALLBACK_FEE: ${SHIPPING_FALLBACK_FEE:-30000}
+      SHIPPING_FREE_THRESHOLD: ${SHIPPING_FREE_THRESHOLD:-5000000}
     volumes:
       - staging-uploads:/data/uploads
 

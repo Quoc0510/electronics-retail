@@ -23,6 +23,7 @@ Mỗi file code có header `@feature [Fxx] ...` để truy vết file → tính 
 | F13 | Đặt hàng không cần đăng nhập và điểm thành viên           | Bắt buộc (yêu cầu bổ sung 28/10) | Xong             |
 | F14 | Nhập sản phẩm từ Excel (thêm mới, cập nhật hàng loạt)     | Có thể làm thêm                  | Xong (chờ merge) |
 | F15 | Kiểm thử E2E (Playwright, trình duyệt thật)               | Có thể làm thêm                  | Xong (chờ merge) |
+| F16 | Phí vận chuyển Giao Hàng Nhanh (GHN)                      | Có thể làm thêm                  | Xong (chờ merge) |
 
 F12 (đợt 1) gồm: chế độ tối, so sánh sản phẩm, trang thông tin (Giới thiệu, Liên hệ, Hỏi đáp, Chính sách), các khối trang chủ mới (thương hiệu, banner, số liệu, sản phẩm đã xem). Đợt 2 (cần backend, làm sau F05-F07): form liên hệ lưu tin nhắn, đăng ký nhận tin, yêu thích và đánh giá (F08), tin tức.
 
@@ -35,6 +36,8 @@ F09: Admin tạo, sửa, bật/tắt mã giảm giá (giảm theo % hoặc số 
 F14: Admin vào Sản phẩm, chọn Nhập từ Excel, chọn "Thêm mới" hoặc "Cập nhật", tải file mẫu, điền rồi tải lên. Có bước xem trước (dòng đúng, dòng sai kèm cột và lý do), chỉ nhập các dòng đúng và tải được file các dòng lỗi để sửa. Tối đa 500 dòng, 2MB mỗi lần; ảnh sản phẩm không nhập bằng Excel (xem TECH_DEBT.md).
 
 F15: 15 kịch bản chạy trên Chromium qua toàn bộ hệ thống Docker (Client, Admin, backend, PostgreSQL): mua hàng của khách vãng lai, vòng đời đơn của thành viên có mã giảm giá tự động và đánh giá, nhập Excel, phân quyền. Chạy bằng `npm run e2e` (xem README.md), cũng là một chặng của CI. Chỉ chạy trên Chromium (xem TECH_DEBT.md).
+
+F16 (yêu cầu bổ sung 18/11): phí vận chuyển tính theo địa chỉ và cân nặng bằng API Giao Hàng Nhanh thay cho phí cố định. Bật bằng cách điền `GHN_TOKEN`, `GHN_SHOP_ID` (và `GHN_API_URL` staging hoặc production) trong `backend/.env`; để trống thì giữ phí cố định như cũ. Địa chỉ giao hàng dùng danh mục tỉnh và phường/xã mới 2 cấp của GHN (ô chọn ở trang đặt hàng và sổ địa chỉ); sản phẩm có thêm cân nặng (gram, Admin nhập hoặc cột Excel). Ngưỡng miễn phí và phí dự phòng cấu hình bằng `SHIPPING_FREE_THRESHOLD`, `SHIPPING_FALLBACK_FEE`. Chưa tạo vận đơn trên GHN (xem TECH_DEBT.md).
 
 F13 (yêu cầu bổ sung 28/10 sau khi dùng thử): khách chưa đăng nhập vẫn đặt hàng được, tra cứu và hủy đơn bằng mã đơn + số điện thoại; thành viên được tích điểm khi đơn hoàn thành (điểm tính theo tổng tiền hàng đã mua, mỗi 1.000.000 đ được 1 điểm, phần lẻ cộng dồn). Chưa có đổi điểm lấy ưu đãi.
 

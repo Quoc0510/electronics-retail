@@ -55,18 +55,19 @@ Phục vụ rubric TC2.1. Nguồn sự thật là [schema.prisma](../backend/pri
 
 ## products - Sản phẩm (F03)
 
-| Cột         | Kiểu    | Ràng buộc                 | Mô tả                                |
-| ----------- | ------- | ------------------------- | ------------------------------------ |
-| sku         | text    | duy nhất                  | Mã sản phẩm                          |
-| name, slug  | text    | slug duy nhất             | Tên và chuỗi URL                     |
-| description | text    | mặc định rỗng             | Mô tả                                |
-| price       | int     | > 0                       | Giá gốc (VND)                        |
-| sale_price  | int     | tùy chọn; 0 < giá < price | Giá khuyến mãi (BR-02)               |
-| stock       | int     | >= 0                      | Tồn kho (BR-03)                      |
-| specs       | jsonb   | mặc định `{}`             | Thông số kỹ thuật dạng tên - giá trị |
-| is_active   | boolean | mặc định true             | false = ẩn                           |
-| category_id | int     | FK categories             | Danh mục                             |
-| brand_id    | int     | FK brands                 | Thương hiệu                          |
+| Cột          | Kiểu    | Ràng buộc                  | Mô tả                                                       |
+| ------------ | ------- | -------------------------- | ----------------------------------------------------------- |
+| sku          | text    | duy nhất                   | Mã sản phẩm                                                 |
+| name, slug   | text    | slug duy nhất              | Tên và chuỗi URL                                            |
+| description  | text    | mặc định rỗng              | Mô tả                                                       |
+| price        | int     | > 0                        | Giá gốc (VND)                                               |
+| sale_price   | int     | tùy chọn; 0 < giá < price  | Giá khuyến mãi (BR-02)                                      |
+| stock        | int     | >= 0                       | Tồn kho (BR-03)                                             |
+| weight_grams | int     | 1 đến 50.000, mặc định 500 | [F16] Cân nặng gồm bao bì (gram) để GHN tính phí vận chuyển |
+| specs        | jsonb   | mặc định `{}`              | Thông số kỹ thuật dạng tên - giá trị                        |
+| is_active    | boolean | mặc định true              | false = ẩn                                                  |
+| category_id  | int     | FK categories              | Danh mục                                                    |
+| brand_id     | int     | FK brands                  | Thương hiệu                                                 |
 
 ## product_images - Ảnh sản phẩm (F03)
 

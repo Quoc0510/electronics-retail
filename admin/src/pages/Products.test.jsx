@@ -42,6 +42,7 @@ const detail = (overrides = {}) => ({
   price: 19990000,
   salePrice: 18490000,
   stock: 25,
+  weightGrams: 350,
   specs: { 'Màn hình': '6.1 inch', RAM: '6GB' },
   isActive: true,
   images: [
@@ -317,6 +318,22 @@ describe('Form sản phẩm (US-08)', () => {
       expect(screen.getByText('Tồn kho phải là số nguyên không âm')).toBeInTheDocument();
     });
 
+    it('[F16] từ chối cân nặng ngoài 1 - 50.000 gram và cân nặng thập phân, không gọi API', async () => {
+      const calls = await openCreate();
+      await fillRequired();
+      const weight = screen.getByLabelText('Cân nặng (gram, gồm bao bì)');
+
+      for (const bad of ['0', '50001', '12.5']) {
+        await userEvent.clear(weight);
+        await userEvent.type(weight, bad);
+        await userEvent.click(screen.getByRole('button', { name: 'Tạo sản phẩm' }));
+        expect(
+          screen.getByText('Cân nặng phải là số nguyên từ 1 đến 50.000 gram'),
+        ).toBeInTheDocument();
+      }
+      expect(calls.some((c) => c.key === 'POST /admin/products')).toBe(false);
+    });
+
     it('giá khuyến mãi phải thấp hơn giá gốc (US-08 AC3)', async () => {
       await openCreate();
 
@@ -395,6 +412,7 @@ describe('Form sản phẩm (US-08)', () => {
         price: 29990000,
         salePrice: null,
         stock: 0,
+        weightGrams: 500, // [F16] mặc định
         description: 'Mô tả mới',
         specs: { RAM: '8GB' },
         isActive: true,
@@ -452,6 +470,7 @@ describe('Form sản phẩm (US-08)', () => {
         18490000,
       );
       expect(screen.getByLabelText('Tồn kho')).toHaveValue(25);
+      expect(screen.getByLabelText('Cân nặng (gram, gồm bao bì)')).toHaveValue(350); // [F16]
       expect(screen.getByLabelText('Mô tả')).toHaveValue('Mô tả cũ');
       expect(screen.getByLabelText('Tên thông số 1')).toHaveValue('Màn hình');
       expect(screen.getByLabelText('Giá trị thông số 2')).toHaveValue('6GB');
