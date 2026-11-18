@@ -5,6 +5,7 @@
  *  - Giỏ trống có gợi ý quay lại mua sắm (AC3).
  *  - Sản phẩm bị ẩn, hết hàng hoặc tồn kho giảm dưới số lượng được đánh dấu rõ và không tính vào tổng tiền (AC4).
  *  - Phí vận chuyển ước tính theo BR-05, kèm gợi ý số tiền còn thiếu để được miễn phí.
+ *  - [F16] Cửa hàng bật Giao Hàng Nhanh: phí phụ thuộc địa chỉ nên giỏ hàng chưa tính, trang đặt hàng mới báo phí chính xác.
  * Nút "Đặt hàng" dẫn tới /dat-hang (F06) khi mọi dòng đều mua được, kể cả khi chưa đăng nhập; khách muốn tích điểm thì đăng nhập
  * rồi quay lại đúng bước đặt hàng.
  */
@@ -26,7 +27,8 @@ import { assetUrl } from '../lib/api.js';
 import { useCart } from '../hooks/useCart.js';
 import { useMe } from '../hooks/useMe.js'; // [F13]
 import { clearCartNotice, getCartNotice, subscribeCartNotice } from '../lib/cartNotice.js';
-import { FREE_SHIPPING_THRESHOLD, amountToFreeShipping, shippingFee } from '../lib/shipping.js';
+import { amountToFreeShipping, shippingFee } from '../lib/shipping.js';
+import { useShippingConfig } from '../hooks/useShipping.js'; // [F16]
 import QuantityStepper from '../components/cart/QuantityStepper.jsx';
 import Price from '../components/Price.jsx';
 
@@ -148,9 +150,13 @@ function CartLine({ item, busy, onChangeQuantity, onRemove, error, resetKey }) {
 }
 
 function Summary({ cart, isLoggedIn }) {
-  const fee = shippingFee(cart.subtotal);
-  const missing = amountToFreeShipping(cart.subtotal);
-  const progress = Math.min(100, Math.round((cart.subtotal / FREE_SHIPPING_THRESHOLD) * 100));
+  const shippingConfig = useShippingConfig();
+  const byAddress = shippingConfig.provider === 'GHN'; // [F16] phí tính theo địa chỉ ở bước đặt hàng
+  const fee = byAddress ? 0 : shippingFee(cart.subtotal, shippingConfig);
+  const { freeThreshold } = shippingConfig;
+  const missing = amountToFreeShipping(cart.subtotal, freeThreshold);
+  const progress =
+    freeThreshold > 0 ? Math.min(100, Math.round((cart.subtotal / freeThreshold) * 100)) : 0;
   const hasIssues = cart.items.length > 0 && !cart.canCheckout;
   // BR-15: điểm tính theo tổng đã mua; khách không đăng nhập coi như bắt đầu từ 0
   const { totalSpent } = useMe();
@@ -171,18 +177,20 @@ function Summary({ cart, isLoggedIn }) {
         <div className="flex justify-between">
           <dt className="text-slate-600">Phí vận chuyển</dt>
           <dd className="font-semibold text-slate-900">
-            {fee === 0 ? 'Miễn phí' : formatVnd(fee)}
+            {byAddress ? 'Tính khi đặt hàng' : fee === 0 ? 'Miễn phí' : formatVnd(fee)}
           </dd>
         </div>
         <div className="flex justify-between border-t border-slate-200 pt-3 text-base">
-          <dt className="font-bold text-slate-900">Tổng cộng</dt>
+          <dt className="font-bold text-slate-900">
+            {byAddress ? 'Tạm tính (chưa gồm phí vận chuyển)' : 'Tổng cộng'}
+          </dt>
           <dd className="font-display text-xl font-bold text-rose-600">
             {formatVnd(cart.subtotal + fee)}
           </dd>
         </div>
       </dl>
 
-      {cart.subtotal > 0 && (
+      {cart.subtotal > 0 && freeThreshold > 0 && (
         <div className="space-y-2 rounded-xl bg-brand-50 p-3 text-sm text-brand-700">
           <p className="flex items-center gap-2 font-medium">
             <IconTruck size={16} className="shrink-0" />

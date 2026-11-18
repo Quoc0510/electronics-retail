@@ -50,6 +50,12 @@ const productFields = z.object({
     .int('Tồn kho phải là số nguyên')
     .min(0, 'Tồn kho không được âm')
     .max(1_000_000, 'Tồn kho tối đa 1.000.000'),
+  // [F16] Cân nặng (gram, gồm bao bì) để Giao Hàng Nhanh tính phí; GHN giới hạn 50 kg một đơn
+  weightGrams: z
+    .number({ error: 'Cân nặng phải là số' })
+    .int('Cân nặng phải là số nguyên (gram)')
+    .min(1, 'Cân nặng tối thiểu 1 gram')
+    .max(50_000, 'Cân nặng tối đa 50.000 gram (50 kg)'),
   specs,
   isActive: z.boolean(),
 });
@@ -67,7 +73,14 @@ const salePriceBelowPrice = (data, ctx) => {
 
 // Khi tạo: các trường có mặc định hợp lý được phép bỏ trống
 export const createProductSchema = productFields
-  .partial({ description: true, salePrice: true, stock: true, specs: true, isActive: true })
+  .partial({
+    description: true,
+    salePrice: true,
+    stock: true,
+    weightGrams: true,
+    specs: true,
+    isActive: true,
+  })
   .superRefine(salePriceBelowPrice);
 
 // Khi sửa: mọi trường đều tùy chọn nhưng phải có ít nhất một trường

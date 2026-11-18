@@ -55,6 +55,7 @@ const FIELD_COLUMN = {
   description: 'description',
   specs: 'specs',
   isActive: 'isActive',
+  weightGrams: 'weightGrams', // [F16]
 };
 
 const invalidFile = (message, code = 'IMPORT_INVALID_FILE') => new AppError(400, message, code);
@@ -209,6 +210,7 @@ export const buildPlan = async (buffer, mode) => {
       isBlank(read(key)) ? undefined : parseWholeNumber(read(key), label);
     put('price', 'price', whole('price', 'Giá gốc'));
     put('stock', 'stock', whole('stock', 'Tồn kho'));
+    put('weightGrams', 'weightGrams', whole('weightGrams', 'Cân nặng (g)')); // [F16]
 
     const salePriceCell = read('salePrice');
     if (isClearKeyword(salePriceCell))
@@ -339,11 +341,12 @@ const GUIDE = {
   create: [
     'HƯỚNG DẪN NHẬP SẢN PHẨM MỚI',
     `Mỗi lần nhập tối đa ${MAX_IMPORT_ROWS} dòng, file .xlsx, dòng đầu là tiêu đề cột (đừng đổi tên cột).`,
-    'Bắt buộc: SKU, Tên sản phẩm, Danh mục, Thương hiệu, Giá gốc. Các cột khác bỏ trống thì dùng mặc định (tồn kho 0, hiển thị Có).',
+    'Bắt buộc: SKU, Tên sản phẩm, Danh mục, Thương hiệu, Giá gốc. Các cột khác bỏ trống thì dùng mặc định (tồn kho 0, hiển thị Có, cân nặng 500 g).',
     'SKU gồm chữ, số và các ký tự . _ - (không phân biệt hoa thường). SKU đã có trong hệ thống thì dòng đó bị bỏ qua và báo lỗi.',
     'Danh mục và Thương hiệu ghi đúng tên đã có (xem trang "Danh mục và thương hiệu"), không phân biệt hoa thường. Tên chưa có thì dòng bị báo lỗi.',
     'Giá là số nguyên đồng, ví dụ 1500000 hoặc 1.500.000. Giá khuyến mãi phải thấp hơn giá gốc, bỏ trống nếu không khuyến mãi.',
     'Thông số: mỗi thông số một dòng (Alt+Enter) hoặc cách nhau dấu chấm phẩy, dạng "Tên: giá trị". Ví dụ: Màn hình: 6.1 inch; RAM: 8GB.',
+    'Cân nặng (g): số gram gồm cả bao bì, từ 1 đến 50.000; dùng để Giao Hàng Nhanh tính phí vận chuyển.',
     'Hiển thị: Có hoặc Không. Ảnh sản phẩm không nhập bằng Excel, hãy tải ở trang sửa sản phẩm.',
     'Sau khi tải file lên, bạn sẽ được xem trước: dòng đúng và dòng sai kèm lý do. Chỉ các dòng đúng được nhập.',
   ],
@@ -385,6 +388,7 @@ export const buildTemplate = async (mode) => {
     cell(product.description),
     cell(formatSpecs(product.specs)),
     product.isActive ? 'Có' : 'Không',
+    product.weightGrams, // [F16]
   ]);
 
   const names = (list) => list.map((item) => item.name + (item.isActive ? '' : ' (đang ẩn)'));

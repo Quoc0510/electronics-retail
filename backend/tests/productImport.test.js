@@ -63,6 +63,7 @@ const line = (overrides = {}) => {
     'Mô tả': null,
     'Thông số': null,
     'Hiển thị': null,
+    'Cân nặng (g)': null,
     ...overrides,
   };
   return HEADERS.map((header) => base[header]);
@@ -277,6 +278,7 @@ describe('GET /api/admin/products/import/template', () => {
       7,
       'Mô tả',
       'Không',
+      500, // [F16] Cân nặng (g): mặc định của sản phẩm tạo bằng prisma
     ]);
   });
 
@@ -900,5 +902,87 @@ describe('POST /api/admin/products/import/errors', () => {
     const res = await upload('/errors', await workbook([line()]), 'create', token);
     expect(res.status).toBe(400);
     expect(res.body.error.code).toBe('IMPORT_NO_ERRORS');
+  });
+});
+
+// ---------------------------------------------------------------------------
+// [F16] Cột Cân nặng (g)
+// ---------------------------------------------------------------------------
+describe('Cột Cân nặng (g) khi nhập từ Excel [F16]', () => {
+  it('thêm mới: có cân nặng thì lưu, để trống thì dùng 500 g', async () => {
+    const token = await signIn();
+    await seedCatalog();
+    const file = await workbook([
+      line({ SKU: 'W-1', 'Tên sản phẩm': 'Có cân nặng', 'Cân nặng (g)': 1250 }),
+      line({ SKU: 'W-2', 'Tên sản phẩm': 'Bỏ trống cân nặng' }),
+    ]);
+
+    const res = await runImport(file, 'create', token);
+
+    expect(res.body.summary).toMatchObject({ created: 2, failed: 0 });
+    expect((await prisma.product.findUnique({ where: { sku: 'W-1' } })).weightGrams).toBe(1250);
+    expect((await prisma.product.findUnique({ where: { sku: 'W-2' } })).weightGrams).toBe(500);
+  });
+
+  it('cân nặng ngoài 1 - 50.000 g thì dòng đó báo lỗi ở cột Cân nặng', async () => {
+    const token = await signIn();
+    await seedCatalog();
+    const file = await workbook([
+      line({ SKU: 'W-1', 'Cân nặng (g)': 0 }),
+      line({ SKU: 'W-2', 'Cân nặng (g)': 60000 }),
+    ]);
+
+    const res = await runImport(file, 'create', token);
+
+    expect(res.body.summary).toMatchObject({ created: 0, failed: 2 });
+    expect(await prisma.product.count()).toBe(0);
+  });
+
+  it('cập nhật: ô trống giữ nguyên cân nặng, có giá trị thì đổi', async () => {
+    const token = await signIn();
+    const catalog = await seedCatalog();
+    await prisma.product.create({
+      data: {
+        sku: 'W-1',
+        name: 'Sản phẩm',
+        slug: 'san-pham',
+        price: 100000,
+        weightGrams: 800,
+        categoryId: catalog.phones.id,
+        brandId: catalog.apple.id,
+      },
+    });
+    const keep = await workbook([line({ SKU: 'W-1' })]);
+    const change = await workbook([line({ SKU: 'W-1', 'Cân nặng (g)': 300 })]);
+
+    await runImport(keep, 'update', token);
+    expect((await prisma.product.findUnique({ where: { sku: 'W-1' } })).weightGrams).toBe(800);
+    await runImport(change, 'update', token);
+    expect((await prisma.product.findUnique({ where: { sku: 'W-1' } })).weightGrams).toBe(300);
+  });
+
+  it('file mẫu cũ không có cột Cân nặng vẫn nhập được', async () => {
+    const token = await signIn();
+    await seedCatalog();
+    const headers = HEADERS.filter((header) => header !== 'Cân nặng (g)');
+    const file = await workbook(
+      [
+        headers.map(
+          (header) =>
+            ({
+              SKU: 'W-1',
+              'Tên sản phẩm': 'Mẫu cũ',
+              'Danh mục': 'Điện thoại',
+              'Thương hiệu': 'Apple',
+              'Giá gốc': 1000000,
+            })[header] ?? null,
+        ),
+      ],
+      headers,
+    );
+
+    const res = await runImport(file, 'create', token);
+
+    expect(res.body.summary).toMatchObject({ created: 1, failed: 0 });
   });
 });

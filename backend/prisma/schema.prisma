@@ -171,6 +171,8 @@ model Product {
   salePrice   Int?     @map("sale_price")
   // BR-03: tồn kho không âm (kiểm tra thêm bằng ràng buộc CHECK trong migration)
   stock       Int      @default(0)
+  // [F16] Cân nặng một sản phẩm (gram, gồm bao bì) để Giao Hàng Nhanh tính phí vận chuyển; CHECK 1..50000 trong migration
+  weightGrams Int      @default(500) @map("weight_grams")
   // Thông số kỹ thuật dạng cặp tên - giá trị, ví dụ {"Màn hình": "6.1 inch OLED"}
   specs       Json     @default("{}")
   isActive    Boolean  @default(true) @map("is_active")

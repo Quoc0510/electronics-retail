@@ -29,6 +29,18 @@ const envSchema = z.object({
   TRUST_PROXY: z.coerce.number().int().min(0).default(0),
   // [F03] Thư mục lưu ảnh tải lên (mặc định backend/uploads). Có thể đặt đường dẫn tuyệt đối
   UPLOAD_DIR: z.string().optional(),
+  // [F16] Giao Hàng Nhanh (GHN): thiếu GHN_TOKEN hoặc GHN_SHOP_ID thì KHÔNG gọi GHN, hệ thống dùng phí cố định (BR-05)
+  GHN_TOKEN: z.string().trim().optional(),
+  GHN_SHOP_ID: z.string().trim().optional(),
+  // Staging của GHN: https://dev-online-gateway.ghn.vn ; production: https://online-gateway.ghn.vn
+  GHN_API_URL: z.string().url().default('https://dev-online-gateway.ghn.vn'),
+  GHN_TIMEOUT_MS: z.coerce.number().int().positive().default(5000),
+  // [F16] Phí cố định dùng khi chưa cấu hình GHN hoặc GHN tạm thời không trả lời được (BR-05)
+  SHIPPING_FALLBACK_FEE: z.coerce.number().int().min(0).default(30000),
+  // [F16] Tiền hàng (sau giảm giá) từ mức này thì cửa hàng chịu phí vận chuyển; 0 = không miễn phí cho đơn nào
+  SHIPPING_FREE_THRESHOLD: z.coerce.number().int().min(0).default(5000000),
+  // [F16] Giới hạn số lần ước tính phí / tra danh mục địa chỉ / 15 phút / IP (mỗi lần gọi là một lần gọi GHN)
+  SHIPPING_RATE_LIMIT: z.coerce.number().int().positive().default(120),
 });
 
 // Thư mục gốc của backend, tính từ vị trí file này để không phụ thuộc vào nơi chạy lệnh
@@ -57,6 +69,8 @@ export const env = {
   ...parsed.data,
   isProduction: parsed.data.NODE_ENV === 'production',
   uploadDir: path.resolve(backendRoot, parsed.data.UPLOAD_DIR ?? 'uploads'),
+  // [F16] Cấu hình GHN đủ cả Token lẫn ShopId (số nguyên dương) mới được tính là đã bật
+  ghnShopId: Number.parseInt(parsed.data.GHN_SHOP_ID ?? '', 10) || null,
   // Chuyển chuỗi "a,b" thành mảng ["a", "b"]
   corsOrigins: parsed.data.CORS_ORIGINS.split(',').map((origin) => origin.trim()),
 };

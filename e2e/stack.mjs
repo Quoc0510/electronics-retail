@@ -25,6 +25,9 @@ const env = {
   GUEST_ORDER_RATE_LIMIT: '1000',
   ORDER_LOOKUP_RATE_LIMIT: '1000',
   COUPON_RATE_LIMIT: '1000',
+  // [F16] Kịch bản E2E đi theo phí vận chuyển cố định: không bao giờ gọi GHN, kể cả khi máy đang đặt GHN_TOKEN trong môi trường
+  GHN_TOKEN: '',
+  GHN_SHOP_ID: '',
   // Git Bash trên Windows tự đổi "/app/backend" thành đường dẫn Windows; tắt việc đó cho các lệnh docker
   MSYS_NO_PATHCONV: '1',
 };

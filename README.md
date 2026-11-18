@@ -90,3 +90,20 @@ Client ở http://localhost:8080, Admin ở http://localhost:8081. Dữ liệu m
 ## Cấu hình
 
 Mọi giá trị nhạy cảm nằm trong `backend/.env` (không commit). Xem mẫu ở `backend/.env.example`.
+
+### Phí vận chuyển Giao Hàng Nhanh (F16)
+
+Mặc định hệ thống dùng phí vận chuyển cố định (30.000 đ, miễn phí từ 5.000.000 đ). Muốn tính phí theo địa chỉ bằng [Giao Hàng Nhanh](https://developer.ghn.vn):
+
+1. Đăng ký tài khoản staging (thử nghiệm) và lấy **Token** cùng **ShopId** ở cổng nhà phát triển của GHN (Token staging và production là hai tài khoản riêng).
+2. Điền vào `backend/.env` (không commit, không gửi Token qua chat hay ảnh chụp màn hình):
+
+```
+GHN_TOKEN=...
+GHN_SHOP_ID=...
+GHN_API_URL=https://dev-online-gateway.ghn.vn
+```
+
+3. Khởi động lại backend. Trang đặt hàng sẽ hiện ô chọn tỉnh/thành và phường/xã theo danh mục của GHN và phí lấy từ GHN. Để trống `GHN_TOKEN` hoặc `GHN_SHOP_ID` thì quay về phí cố định.
+
+Chỉnh phí dự phòng và ngưỡng miễn phí bằng `SHIPPING_FALLBACK_FEE` và `SHIPPING_FREE_THRESHOLD` (đặt 0 để không miễn phí cho đơn nào). Cân nặng từng sản phẩm nhập ở trang Sản phẩm của Admin (mặc định 500 g). Production dùng `GHN_API_URL=https://online-gateway.ghn.vn` với Token production. Bộ kiểm thử không bao giờ gọi GHN thật.

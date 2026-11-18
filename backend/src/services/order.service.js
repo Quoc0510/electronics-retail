@@ -5,6 +5,8 @@
  * hoàn thành thì được cộng điểm thành viên (BR-15).
  * [F09] Đơn có thể dùng một mã giảm giá (BR-14): số tiền giảm tính lại ở máy chủ trong chính transaction đặt hàng, phí ship và
  * điểm thành viên tính trên tiền hàng sau giảm, hủy đơn thì trả lại lượt dùng mã.
+ * [F16] Phí vận chuyển lấy từ Giao Hàng Nhanh theo địa chỉ và cân nặng (BR-05): gọi GHN TRƯỚC khi mở transaction để không giữ
+ * khóa kho trong lúc chờ mạng; trong transaction chỉ đối chiếu cân nặng rồi áp quy tắc miễn phí.
  *
  * createOrder làm MỌI việc trong MỘT transaction (US-16 AC5): khóa giỏ, kiểm tra và trừ tồn kho, tạo đơn kèm các dòng
  * và lịch sử, xóa giỏ. Một bước lỗi thì tất cả được hoàn lại, nên không bao giờ có đơn mà kho chưa trừ, hay kho đã trừ mà
@@ -22,7 +24,9 @@ import { escapeLike } from '../lib/like.js';
 import { generateOrderCode } from '../lib/orderCode.js';
 import { ORDER_STATUSES, allowedNext, canTransition } from '../lib/orderStatus.js'; // [F07]
 import { calculatePoints } from '../lib/points.js'; // [F13]
-import { calculateShippingFee } from '../lib/shipping.js';
+import { env } from '../config/env.js'; // [F16]
+import { applyFreeShipping } from '../lib/shipping.js';
+import { SOURCES, linesFromItems, quoteShipping, totalWeight } from './shipping.service.js'; // [F16]
 import { redeemCoupon, releaseCoupon } from './coupon.service.js'; // [F09]
 import { AppError } from '../utils/AppError.js';
 import { isVisible, mergeDuplicates } from './cart.service.js';
@@ -121,9 +125,21 @@ export const createOrder = async (userId, { addressId, shipping, note, couponCod
     if (!address) throw new AppError(404, 'Không tìm thấy địa chỉ giao hàng', 'ADDRESS_NOT_FOUND');
   }
 
+  // [F16] Phí GHN lấy trước, ngoài transaction
+  const shippingQuote = await quoteForCart(userId, address);
   return withOrderCodeRetry(() =>
-    prisma.$transaction((tx) => placeOrder(tx, userId, address, note, couponCode)),
+    prisma.$transaction((tx) => placeOrder(tx, userId, address, note, couponCode, shippingQuote)),
   );
+};
+
+// [F16] Giỏ của thành viên -> phí GHN; giỏ trống thì để transaction báo EMPTY_CART như cũ
+const quoteForCart = async (userId, address) => {
+  const cartItems = await prisma.cartItem.findMany({
+    where: { cart: { userId } },
+    select: { productId: true, quantity: true },
+  });
+  if (cartItems.length === 0) return null;
+  return quoteShipping(address, await linesFromItems(cartItems));
 };
 
 // Mã đơn ngẫu nhiên trùng mã có sẵn (rất hiếm): tạo mã khác rồi làm lại cả transaction
@@ -196,6 +212,7 @@ const reserveLines = async (tx, entries) => {
       // [F09] Chỉ để xét phạm vi mã giảm giá; không lưu vào dòng đơn (insertOrder bỏ hai trường này)
       categoryId: product.categoryId,
       brandId: product.brandId,
+      weightGrams: product.weightGrams, // [F16] chỉ để đối chiếu cân nặng đã tính phí GHN; không lưu vào dòng đơn
       productName: product.name, // BR-04: bản sao tại thời điểm đặt
       productSku: product.sku,
       unitPrice: product.salePrice ?? product.price, // BR-02
@@ -223,14 +240,29 @@ const toOrderItemData = (line) => ({
   quantity: line.quantity,
 });
 
+// [F16] Phí GHN đã lấy trước transaction chỉ đúng với cân nặng lúc đó: giỏ vừa đổi thì bắt khách xem lại thay vì tính sai phí
+const resolveShippingFee = (quote, lines, payable) => {
+  if (quote?.source === SOURCES.GHN && quote.weight !== totalWeight(lines)) {
+    throw new AppError(
+      409,
+      'Giỏ hàng vừa thay đổi nên phí vận chuyển cần tính lại, hãy kiểm tra rồi đặt hàng lần nữa',
+      'CART_CHANGED',
+    );
+  }
+  // BR-05, BR-14: miễn phí ship xét trên tiền hàng SAU giảm; không có báo giá (chưa bật GHN) thì dùng phí cố định
+  return applyFreeShipping(quote?.fee ?? env.SHIPPING_FALLBACK_FEE, payable);
+};
+
 // Tạo đơn kèm các dòng và dòng lịch sử đầu tiên; userId null = đơn của khách vãng lai (BR-11)
-const insertOrder = async (tx, { userId, lines, address, note, idempotencyKey, couponCode }) => {
+const insertOrder = async (
+  tx,
+  { userId, lines, address, note, idempotencyKey, couponCode, shippingQuote },
+) => {
   const subtotal = lines.reduce((sum, line) => sum + line.unitPrice * line.quantity, 0);
   // [F09] Dùng mã (nếu có) NGAY trong transaction này: lỗi ở bước sau thì lượt dùng được hoàn lại cùng kho
   const coupon = couponCode ? await redeemCoupon(tx, couponCode, lines, userId) : null;
   const discount = coupon?.discount ?? 0;
-  // BR-05, BR-14: miễn phí ship xét trên tiền hàng SAU giảm
-  const shippingFee = calculateShippingFee(subtotal - discount);
+  const shippingFee = resolveShippingFee(shippingQuote, lines, subtotal - discount);
 
   const order = await tx.order.create({
     data: {
@@ -264,7 +296,7 @@ const insertOrder = async (tx, { userId, lines, address, note, idempotencyKey, c
   return toOrderDto(order);
 };
 
-const placeOrder = async (tx, userId, address, note, couponCode) => {
+const placeOrder = async (tx, userId, address, note, couponCode, shippingQuote) => {
   // Khóa dòng giỏ: các lần đặt đồng thời của cùng người dùng phải xếp hàng (chống đặt trùng, AC6)
   const locked = await tx.$queryRaw`SELECT id FROM carts WHERE user_id = ${userId} FOR UPDATE`;
   if (locked.length === 0) throw new AppError(400, 'Giỏ hàng của bạn đang trống', 'EMPTY_CART');
@@ -279,7 +311,7 @@ const placeOrder = async (tx, userId, address, note, couponCode) => {
   }
 
   const lines = await reserveLines(tx, cartItems);
-  const order = await insertOrder(tx, { userId, lines, address, note, couponCode });
+  const order = await insertOrder(tx, { userId, lines, address, note, couponCode, shippingQuote });
   await tx.cartItem.deleteMany({ where: { cart: { userId } } });
   return order;
 };
@@ -307,6 +339,9 @@ const findOrderByKey = async (idempotencyKey) => {
 export const createGuestOrder = async ({ items, shipping, note, requestId, couponCode }) => {
   const replay = await findOrderByKey(requestId);
   if (replay) return replay;
+
+  // [F16] Phí GHN lấy trước, ngoài transaction (sản phẩm không tồn tại để transaction báo như cũ)
+  const shippingQuote = await quoteShipping(shipping, await linesFromItems(mergeDuplicates(items)));
 
   return withOrderCodeRetry(
     () =>
@@ -350,6 +385,7 @@ export const createGuestOrder = async ({ items, shipping, note, requestId, coupo
           note,
           idempotencyKey: requestId,
           couponCode,
+          shippingQuote,
         });
       }),
     () => findOrderByKey(requestId),

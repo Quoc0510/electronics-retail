@@ -6,10 +6,13 @@ import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { Alert, Button, FormField, getErrorMessage, useFormState } from '@techstore/shared';
 import { api } from '../../lib/api.js';
 import { EMPTY_ADDRESS, validateAddress as validate } from '../../lib/addressValidation.js';
+import AddressFields from '../checkout/AddressFields.jsx'; // [F16]
+import { useShippingConfig } from '../../hooks/useShipping.js'; // [F16]
 
 // Form thêm hoặc sửa một địa chỉ. address = null nghĩa là thêm mới
 function AddressForm({ address, onDone, onCancel }) {
   const queryClient = useQueryClient();
+  const { provider } = useShippingConfig();
   const form = useFormState(
     address ? { ...address, district: address.district ?? '' } : EMPTY_ADDRESS,
   );
@@ -39,10 +42,7 @@ function AddressForm({ address, onDone, onCancel }) {
       <div className="grid gap-4 sm:grid-cols-2">
         <FormField label="Tên người nhận" {...form.bind('recipientName')} />
         <FormField label="Số điện thoại người nhận" type="tel" {...form.bind('phone')} />
-        <FormField label="Tỉnh/Thành phố" {...form.bind('province')} />
-        <FormField label="Quận/Huyện (nếu có)" {...form.bind('district')} />
-        <FormField label="Phường/Xã" {...form.bind('ward')} />
-        <FormField label="Số nhà, tên đường" {...form.bind('street')} />
+        <AddressFields form={form} provider={provider} />
       </div>
 
       <label className="flex items-center gap-2 text-sm text-slate-700">

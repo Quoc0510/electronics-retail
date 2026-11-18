@@ -117,7 +117,7 @@ export const createProduct = async (data) => {
 
   try {
     return await prisma.product.create({
-      // salePrice, stock, specs... không gửi thì dùng mặc định của schema (null, 0, {}, true)
+      // salePrice, stock, weightGrams, specs... không gửi thì dùng mặc định của schema (null, 0, 500 g, {}, true)
       data: { ...data, slug },
       include: detailInclude,
     });
