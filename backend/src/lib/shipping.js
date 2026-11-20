@@ -3,6 +3,8 @@
  * Phí gốc do Giao Hàng Nhanh tính theo địa chỉ và cân nặng (F16); chưa bật GHN hoặc GHN không trả lời được thì dùng phí cố
  * định SHIPPING_FALLBACK_FEE (mặc định 30.000 đ). Tiền hàng SAU giảm giá từ SHIPPING_FREE_THRESHOLD (mặc định 5.000.000 đ)
  * thì miễn phí (cửa hàng chịu phí GHN). Giá trị này do backend tính khi tạo đơn (nguồn sự thật); Client chỉ hiển thị ước tính.
+ * SHIPPING_FREE_THRESHOLD chỉ là giá trị MẶC ĐỊNH: Admin đổi ngưỡng ở trang Cài đặt (settings.service.js) và nơi gọi truyền
+ * ngưỡng đó vào `threshold`.
  */
 import { env } from '../config/env.js';
 

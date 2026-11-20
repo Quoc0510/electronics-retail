@@ -24,9 +24,10 @@ import {
 
 test.describe.configure({ mode: 'serial' });
 
-const PRODUCT_NAME = 'Sạc dự phòng Anker 737';
-const PRICE_TEXT = '2.290.000 ₫';
-const DISCOUNT_TEXT = '343.500 ₫'; // 15% của 2.290.000
+// Sản phẩm mẫu (backend/prisma/catalog.js, SKU AC-ANK-A2669): không có giá khuyến mãi nên tiền hàng đúng bằng giá gốc
+const PRODUCT_NAME = 'Củ sạc Anker Prime 67W GaN 3 cổng';
+const PRICE_TEXT = '1.520.000 ₫';
+const DISCOUNT_TEXT = '228.000 ₫'; // 15% của 1.520.000
 const COMMENT = `Sạc rất tốt, kiểm thử E2E ${unique()}`;
 const state = {
   couponCode: `E2E${unique()}`,
@@ -94,7 +95,7 @@ test('B. Thành viên được tự áp mã, bỏ rồi áp lại bằng gợi �
   await expect(page.getByRole('heading', { name: 'Đặt hàng thành công!' })).toBeVisible();
   state.orderCode = await readOrderCode(page);
 
-  // Đơn lưu mã và số tiền giảm; điểm dự kiến tính trên tiền hàng sau giảm (2.290.000 - 343.500 = 1.946.500 -> 1 điểm)
+  // Đơn lưu mã và số tiền giảm; điểm dự kiến tính trên tiền hàng sau giảm (1.520.000 - 228.000 = 1.292.000 -> 1 điểm)
   await expect(page.getByText(`Mã giảm giá (${state.couponCode})`)).toBeVisible();
   await expect(page.getByText(`-${DISCOUNT_TEXT}`)).toBeVisible();
   await expect(page.getByText(PRICE_TEXT).first()).toBeVisible();

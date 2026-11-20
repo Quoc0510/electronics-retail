@@ -392,3 +392,13 @@ model Coupon {
   @@index([autoApply, isActive])
   @@map("coupons")
 }
+
+// [F16] Cài đặt cửa hàng dạng khóa - giá trị: Admin sửa ở trang Cài đặt (ví dụ shipping.freeThreshold, ngưỡng miễn phí vận chuyển).
+// Chưa có dòng nào cho một khóa thì dùng giá trị mặc định từ biến môi trường. Giá trị lưu dạng chuỗi, nơi đọc tự kiểm tra kiểu.
+model AppSetting {
+  key       String   @id
+  value     String
+  updatedAt DateTime @updatedAt @map("updated_at")
+
+  @@map("app_settings")
+}

@@ -6,10 +6,15 @@ import { z } from 'zod';
 
 const name = z.string().trim().min(1, 'Vui lòng nhập tên').max(100, 'Tên tối đa 100 ký tự');
 
-// Chỉ nhận đường dẫn http/https (từ chối javascript:, data:...). Chuỗi rỗng nghĩa là xóa ảnh
+// Chỉ nhận đường dẫn http/https hoặc ảnh đã có trên máy chủ (/uploads/..., ví dụ ảnh mẫu của seed); từ chối javascript:, data:...
+// Chuỗi rỗng nghĩa là xóa ảnh
 const optionalUrl = z
   .union([
     z.literal('').transform(() => null),
+    z
+      .string()
+      .regex(/^\/uploads\/(?!.*\.\.)[\w./-]+$/, 'Đường dẫn ảnh tải lên không hợp lệ')
+      .max(500, 'Đường dẫn tối đa 500 ký tự'),
     z
       .url({ protocol: /^https?$/, error: 'Đường dẫn phải bắt đầu bằng http:// hoặc https://' })
       .max(500, 'Đường dẫn tối đa 500 ký tự'),

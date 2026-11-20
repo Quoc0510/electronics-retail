@@ -7,7 +7,7 @@ import { SHIPPING, fillShipping, openProduct, readOrderCode } from './helpers.js
 
 test('khách vãng lai mua hàng không cần đăng nhập rồi tra cứu và hủy đơn', async ({ page }) => {
   // 1. Tìm sản phẩm rồi thêm vào giỏ
-  await openProduct(page, 'Sạc dự phòng Anker 737');
+  await openProduct(page, 'Củ sạc Anker Prime 67W GaN 3 cổng');
   await page.getByRole('button', { name: 'Thêm vào giỏ' }).first().click();
   await expect(page.getByRole('link', { name: 'Giỏ hàng (1)' })).toBeVisible();
 

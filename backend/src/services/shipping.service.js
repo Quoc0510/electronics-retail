@@ -11,6 +11,7 @@ import { env } from '../config/env.js';
 import { logger } from '../config/logger.js';
 import { prisma } from '../lib/prisma.js';
 import { GhnError, fetchProvinces, fetchWards, isGhnConfigured, previewFee } from '../lib/ghn.js';
+import { getFreeShippingThreshold } from './settings.service.js';
 import { AppError } from '../utils/AppError.js';
 
 export const MAX_WEIGHT_GRAMS = 50_000; // GHN: tối đa 50 kg một đơn
@@ -22,11 +23,14 @@ const PLACEHOLDER = { name: 'Khách hàng TechStore', phone: '0900000000' };
 
 export const SOURCES = { GHN: 'GHN', FIXED: 'FIXED', FALLBACK: 'FALLBACK' };
 
-/** Thông tin cho Client biết đang tính phí kiểu nào và ngưỡng miễn phí (để khỏi cứng số ở trình duyệt). */
-export const getShippingConfig = () => ({
+/**
+ * Thông tin cho Client biết đang tính phí kiểu nào và ngưỡng miễn phí (để khỏi cứng số ở trình duyệt).
+ * Ngưỡng miễn phí do Admin đặt ở trang Cài đặt (bảng app_settings); chưa đặt thì dùng SHIPPING_FREE_THRESHOLD.
+ */
+export const getShippingConfig = async () => ({
   provider: isGhnConfigured() ? 'GHN' : 'FIXED',
   fallbackFee: env.SHIPPING_FALLBACK_FEE,
-  freeThreshold: env.SHIPPING_FREE_THRESHOLD,
+  freeThreshold: await getFreeShippingThreshold(),
 });
 
 // --- Danh mục địa chỉ (có nhớ tạm) ---------------------------------------------------------------------------------
@@ -182,5 +186,5 @@ export const quoteForItems = async (address, items) => {
   const lines = await linesFromItems(items);
   if (lines.length === 0) throw new AppError(400, 'Giỏ hàng đang trống', 'EMPTY_CART');
   const { fee, source, expectedDeliveryTime } = await quoteShipping(address, lines);
-  return { fee, source, expectedDeliveryTime, ...getShippingConfig() };
+  return { fee, source, expectedDeliveryTime, ...(await getShippingConfig()) };
 };

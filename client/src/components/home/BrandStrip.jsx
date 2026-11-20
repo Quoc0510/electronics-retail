@@ -19,7 +19,8 @@ export default function BrandStrip({ brands }) {
                 src={assetUrl(brand.logoUrl)}
                 alt=""
                 loading="lazy"
-                className="h-10 w-10 shrink-0 rounded-lg object-contain"
+                // Khung rộng hơn vuông vì nhiều logo là chữ dài (Bose, Sennheiser, Logitech...); object-contain giữ đúng tỉ lệ
+                className="h-10 w-16 shrink-0 object-contain"
               />
             ) : (
               <span

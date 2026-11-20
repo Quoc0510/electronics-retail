@@ -15,6 +15,7 @@ import {
   IconLayers,
   IconLogOut,
   IconMenu,
+  IconSliders,
   IconStar,
   IconTag,
   IconUsers,
@@ -32,6 +33,7 @@ const MENU_ITEMS = [
   { to: '/danh-gia', label: 'Đánh giá', Icon: IconStar }, // [F08]
   { to: '/ma-giam-gia', label: 'Mã giảm giá', Icon: IconTag }, // [F09]
   { to: '/nguoi-dung', label: 'Người dùng', Icon: IconUsers }, // [F10]
+  { to: '/cai-dat', label: 'Cài đặt', Icon: IconSliders }, // [F16]
 ];
 
 const linkClass = ({ isActive }) =>
