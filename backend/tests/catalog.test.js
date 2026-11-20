@@ -90,6 +90,24 @@ describe.each(resources)(
         expect(cleared.body[urlField]).toBeNull();
       });
 
+      it('[ảnh mẫu] nhận đường dẫn ảnh đã có trên máy chủ (/uploads/...) nhưng không nhận đường dẫn lạ', async () => {
+        const auth = await adminAuth();
+        const created = await request(app)
+          .post(url)
+          .set(auth)
+          .send({ name: 'Ảnh mẫu', [urlField]: '/uploads/seed/category-laptop.webp' });
+        expect(created.status).toBe(201);
+        expect(created.body[urlField]).toBe('/uploads/seed/category-laptop.webp');
+
+        for (const bad of ['/etc/passwd', '/uploads/../secret.png', '//evil.com/a.png']) {
+          const rejected = await request(app)
+            .post(url)
+            .set(auth)
+            .send({ name: `Sai ${bad}`, [urlField]: bad });
+          expect(rejected.status).toBe(400);
+        }
+      });
+
       it('AC1: từ chối tên trùng, không phân biệt hoa thường và khoảng trắng', async () => {
         const auth = await adminAuth();
         await request(app).post(url).set(auth).send({ name: 'Laptop' });

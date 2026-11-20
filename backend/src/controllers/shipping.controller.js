@@ -4,9 +4,9 @@
 import * as shippingService from '../services/shipping.service.js';
 import { asyncHandler } from '../utils/asyncHandler.js';
 
-export const config = (_req, res) => {
-  res.json(shippingService.getShippingConfig());
-};
+export const config = asyncHandler(async (_req, res) => {
+  res.json(await shippingService.getShippingConfig());
+});
 
 export const provinces = asyncHandler(async (_req, res) => {
   res.json({ items: await shippingService.listProvinces() });

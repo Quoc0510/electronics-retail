@@ -77,7 +77,8 @@ export default function HomePage() {
         </Reveal>
       )}
 
-      {brands.data?.length > 0 && (
+      {/* Hãng chưa có sản phẩm nào đang bán thì không hiện ở đây (ô chỉ có chữ cái đầu và "0 sản phẩm" làm lệch dải) */}
+      {brands.data?.some((brand) => brand.productCount > 0) && (
         <Reveal>
           <section aria-labelledby="brands-heading">
             <SectionHeader
@@ -85,7 +86,7 @@ export default function HomePage() {
               title="Thương hiệu nổi bật"
               subtitle="Sản phẩm chính hãng từ các hãng uy tín"
             />
-            <BrandStrip brands={brands.data} />
+            <BrandStrip brands={brands.data.filter((brand) => brand.productCount > 0)} />
           </section>
         </Reveal>
       )}

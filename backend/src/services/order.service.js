@@ -27,6 +27,7 @@ import { calculatePoints } from '../lib/points.js'; // [F13]
 import { env } from '../config/env.js'; // [F16]
 import { applyFreeShipping } from '../lib/shipping.js';
 import { SOURCES, linesFromItems, quoteShipping, totalWeight } from './shipping.service.js'; // [F16]
+import { getFreeShippingThreshold } from './settings.service.js'; // [F16]
 import { redeemCoupon, releaseCoupon } from './coupon.service.js'; // [F09]
 import { AppError } from '../utils/AppError.js';
 import { isVisible, mergeDuplicates } from './cart.service.js';
@@ -125,10 +126,13 @@ export const createOrder = async (userId, { addressId, shipping, note, couponCod
     if (!address) throw new AppError(404, 'Không tìm thấy địa chỉ giao hàng', 'ADDRESS_NOT_FOUND');
   }
 
-  // [F16] Phí GHN lấy trước, ngoài transaction
-  const shippingQuote = await quoteForCart(userId, address);
+  // [F16] Phí GHN và ngưỡng miễn phí (Admin đặt ở trang Cài đặt) lấy trước, ngoài transaction
+  const shippingPlan = {
+    quote: await quoteForCart(userId, address),
+    freeThreshold: await getFreeShippingThreshold(),
+  };
   return withOrderCodeRetry(() =>
-    prisma.$transaction((tx) => placeOrder(tx, userId, address, note, couponCode, shippingQuote)),
+    prisma.$transaction((tx) => placeOrder(tx, userId, address, note, couponCode, shippingPlan)),
   );
 };
 
@@ -241,7 +245,7 @@ const toOrderItemData = (line) => ({
 });
 
 // [F16] Phí GHN đã lấy trước transaction chỉ đúng với cân nặng lúc đó: giỏ vừa đổi thì bắt khách xem lại thay vì tính sai phí
-const resolveShippingFee = (quote, lines, payable) => {
+const resolveShippingFee = ({ quote, freeThreshold }, lines, payable) => {
   if (quote?.source === SOURCES.GHN && quote.weight !== totalWeight(lines)) {
     throw new AppError(
       409,
@@ -250,19 +254,19 @@ const resolveShippingFee = (quote, lines, payable) => {
     );
   }
   // BR-05, BR-14: miễn phí ship xét trên tiền hàng SAU giảm; không có báo giá (chưa bật GHN) thì dùng phí cố định
-  return applyFreeShipping(quote?.fee ?? env.SHIPPING_FALLBACK_FEE, payable);
+  return applyFreeShipping(quote?.fee ?? env.SHIPPING_FALLBACK_FEE, payable, freeThreshold);
 };
 
 // Tạo đơn kèm các dòng và dòng lịch sử đầu tiên; userId null = đơn của khách vãng lai (BR-11)
 const insertOrder = async (
   tx,
-  { userId, lines, address, note, idempotencyKey, couponCode, shippingQuote },
+  { userId, lines, address, note, idempotencyKey, couponCode, shippingPlan },
 ) => {
   const subtotal = lines.reduce((sum, line) => sum + line.unitPrice * line.quantity, 0);
   // [F09] Dùng mã (nếu có) NGAY trong transaction này: lỗi ở bước sau thì lượt dùng được hoàn lại cùng kho
   const coupon = couponCode ? await redeemCoupon(tx, couponCode, lines, userId) : null;
   const discount = coupon?.discount ?? 0;
-  const shippingFee = resolveShippingFee(shippingQuote, lines, subtotal - discount);
+  const shippingFee = resolveShippingFee(shippingPlan, lines, subtotal - discount);
 
   const order = await tx.order.create({
     data: {
@@ -296,7 +300,7 @@ const insertOrder = async (
   return toOrderDto(order);
 };
 
-const placeOrder = async (tx, userId, address, note, couponCode, shippingQuote) => {
+const placeOrder = async (tx, userId, address, note, couponCode, shippingPlan) => {
   // Khóa dòng giỏ: các lần đặt đồng thời của cùng người dùng phải xếp hàng (chống đặt trùng, AC6)
   const locked = await tx.$queryRaw`SELECT id FROM carts WHERE user_id = ${userId} FOR UPDATE`;
   if (locked.length === 0) throw new AppError(400, 'Giỏ hàng của bạn đang trống', 'EMPTY_CART');
@@ -311,7 +315,7 @@ const placeOrder = async (tx, userId, address, note, couponCode, shippingQuote) 
   }
 
   const lines = await reserveLines(tx, cartItems);
-  const order = await insertOrder(tx, { userId, lines, address, note, couponCode, shippingQuote });
+  const order = await insertOrder(tx, { userId, lines, address, note, couponCode, shippingPlan });
   await tx.cartItem.deleteMany({ where: { cart: { userId } } });
   return order;
 };
@@ -340,8 +344,11 @@ export const createGuestOrder = async ({ items, shipping, note, requestId, coupo
   const replay = await findOrderByKey(requestId);
   if (replay) return replay;
 
-  // [F16] Phí GHN lấy trước, ngoài transaction (sản phẩm không tồn tại để transaction báo như cũ)
-  const shippingQuote = await quoteShipping(shipping, await linesFromItems(mergeDuplicates(items)));
+  // [F16] Phí GHN và ngưỡng miễn phí lấy trước, ngoài transaction (sản phẩm không tồn tại để transaction báo như cũ)
+  const shippingPlan = {
+    quote: await quoteShipping(shipping, await linesFromItems(mergeDuplicates(items))),
+    freeThreshold: await getFreeShippingThreshold(),
+  };
 
   return withOrderCodeRetry(
     () =>
@@ -385,7 +392,7 @@ export const createGuestOrder = async ({ items, shipping, note, requestId, coupo
           note,
           idempotencyKey: requestId,
           couponCode,
-          shippingQuote,
+          shippingPlan,
         });
       }),
     () => findOrderByKey(requestId),

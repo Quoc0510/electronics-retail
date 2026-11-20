@@ -17,6 +17,7 @@ import ProductFormPage from './pages/ProductFormPage.jsx'; // [F03]
 import ProductImportPage from './pages/ProductImportPage.jsx'; // [F14]
 import ProductsPage from './pages/ProductsPage.jsx'; // [F03]
 import ReviewsPage from './pages/ReviewsPage.jsx'; // [F08]
+import SettingsPage from './pages/SettingsPage.jsx'; // [F16]
 import UsersPage from './pages/UsersPage.jsx'; // [F10]
 
 export default function App() {
@@ -46,6 +47,8 @@ export default function App() {
           <Route path="/danh-gia" element={<ReviewsPage />} />
           {/* [F09] Quản lý mã giảm giá */}
           <Route path="/ma-giam-gia" element={<CouponsPage />} />
+          {/* [F16] Cài đặt cửa hàng (ngưỡng miễn phí vận chuyển) */}
+          <Route path="/cai-dat" element={<SettingsPage />} />
           <Route path="*" element={<NotFoundPage />} />
         </Route>
       </Route>

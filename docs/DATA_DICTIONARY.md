@@ -135,3 +135,11 @@ Phục vụ rubric TC2.1. Nguồn sự thật là [schema.prisma](../backend/pri
 | min_points                           | int         | >= 0, mặc định 0                       | Điểm thành viên tối thiểu để dùng mã (khách chưa đăng nhập tính là 0 điểm)                                            |
 | auto_apply                           | bool        | mặc định false                         | Tự động áp dụng ở trang đặt hàng: trong các mã bật cờ và dùng được cho giỏ, chọn mã giảm nhiều tiền nhất (US-25 AC10) |
 | product_ids, category_ids, brand_ids | int[]       | mỗi danh sách tối đa 50, mặc định rỗng | Phạm vi áp dụng, là hợp của ba danh sách; cả ba rỗng = mọi sản phẩm. Không có khóa ngoại: id đã xóa chỉ không khớp ai |
+
+## app_settings - Cài đặt cửa hàng (F16)
+
+| Cột        | Kiểu      | Ràng buộc   | Mô tả                                                                                                                                |
+| ---------- | --------- | ----------- | ------------------------------------------------------------------------------------------------------------------------------------ |
+| key        | text      | khóa chính  | Tên cài đặt, hiện có `shipping.freeThreshold` (ngưỡng miễn phí vận chuyển, đồng)                                                     |
+| value      | text      | bắt buộc    | Giá trị dạng chuỗi; nơi đọc tự kiểm tra kiểu (sai kiểu thì bỏ qua và dùng mặc định). Chưa có dòng = dùng mặc định từ biến môi trường |
+| updated_at | timestamp | tự cập nhật | Lần chỉnh gần nhất (hiện ở trang Cài đặt)                                                                                            |

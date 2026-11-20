@@ -49,6 +49,20 @@ describe('Thương hiệu nổi bật', () => {
     expect(dell.querySelector('img')).toHaveAttribute('src', '/uploads/dell.png');
   });
 
+  it('hãng chưa có sản phẩm nào thì không hiện trong dải thương hiệu', async () => {
+    openHome({
+      'GET /brands': [
+        200,
+        [...brands, { id: 3, name: 'Sony', slug: 'sony', logoUrl: null, productCount: 0 }],
+      ],
+    });
+
+    const section = await screen.findByRole('region', { name: 'Thương hiệu nổi bật' });
+
+    expect(within(section).getByRole('link', { name: /Apple/ })).toBeInTheDocument();
+    expect(within(section).queryByRole('link', { name: /Sony/ })).not.toBeInTheDocument();
+  });
+
   it('API thương hiệu lỗi thì ẩn khối, trang chủ vẫn dùng được', async () => {
     openHome({ 'GET /brands': [500, apiError('INTERNAL_ERROR', 'Lỗi')] });
 

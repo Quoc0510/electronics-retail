@@ -174,6 +174,23 @@ describe.each(resources)('Quản lý $noun', (resource) => {
       expect(calls.some((c) => c.key === `POST ${api}`)).toBe(false);
     });
 
+    it('nhận đường dẫn ảnh đã có trên máy chủ (/uploads/...) như ảnh mẫu của seed', async () => {
+      const { calls } = await openPage(resource, {
+        items: [],
+        handlers: { [`POST ${api}`]: () => [201, item({ id: 6, name: 'Có ảnh mẫu' })] },
+      });
+      await openForm();
+
+      await userEvent.type(screen.getByLabelText('Tên'), 'Có ảnh mẫu');
+      await userEvent.type(screen.getByLabelText(imageLabel), '/uploads/seed/anh-mau.webp');
+      await userEvent.click(screen.getByRole('button', { name: 'Lưu' }));
+
+      await waitFor(() => expect(calls.some((c) => c.key === `POST ${api}`)).toBe(true));
+      expect(
+        screen.queryByText('Đường dẫn phải bắt đầu bằng http:// hoặc https://'),
+      ).not.toBeInTheDocument();
+    });
+
     it('gửi đúng dữ liệu, đóng form và danh sách có mục mới', async () => {
       const { calls, state } = await openPage(resource, {
         items: [],

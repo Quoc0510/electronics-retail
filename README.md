@@ -31,7 +31,7 @@ cp backend/.env.example backend/.env
 # 4. Sinh Prisma Client (chạy lại mỗi khi sửa schema), tạo bảng và nạp dữ liệu mẫu
 npm run prisma:generate -w backend
 npm run prisma:deploy -w backend
-npm run prisma:seed -w backend
+npm run prisma:seed -w backend   # 56 sản phẩm thật kèm ảnh (nguồn ảnh: docs/IMAGE_CREDITS.md); chạy lại không tạo trùng
 
 # 5. Chạy từng phần (mỗi lệnh một terminal)
 npm run dev:backend
@@ -106,4 +106,4 @@ GHN_API_URL=https://dev-online-gateway.ghn.vn
 
 3. Khởi động lại backend. Trang đặt hàng sẽ hiện ô chọn tỉnh/thành và phường/xã theo danh mục của GHN và phí lấy từ GHN. Để trống `GHN_TOKEN` hoặc `GHN_SHOP_ID` thì quay về phí cố định.
 
-Chỉnh phí dự phòng và ngưỡng miễn phí bằng `SHIPPING_FALLBACK_FEE` và `SHIPPING_FREE_THRESHOLD` (đặt 0 để không miễn phí cho đơn nào). Cân nặng từng sản phẩm nhập ở trang Sản phẩm của Admin (mặc định 500 g). Production dùng `GHN_API_URL=https://online-gateway.ghn.vn` với Token production. Bộ kiểm thử không bao giờ gọi GHN thật.
+Ngưỡng miễn phí vận chuyển chỉnh ở Admin, trang Cài đặt (nhập 0 để không miễn phí cho đơn nào); `SHIPPING_FREE_THRESHOLD` chỉ là giá trị mặc định khi chưa chỉnh. Phí dự phòng chỉnh bằng `SHIPPING_FALLBACK_FEE`. Cân nặng từng sản phẩm nhập ở trang Sản phẩm của Admin (mặc định 500 g). Production dùng `GHN_API_URL=https://online-gateway.ghn.vn` với Token production. Bộ kiểm thử không bao giờ gọi GHN thật.

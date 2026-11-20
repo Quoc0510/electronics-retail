@@ -32,7 +32,8 @@ export default function TaxonomyForm({
       errors.description = 'Mô tả tối đa 500 ký tự';
     }
     const image = values[imageField].trim();
-    if (image && !isValidHttpUrl(image)) {
+    // Ảnh mẫu của seed là ảnh đã có trên máy chủ (/uploads/...), vẫn lưu lại được khi sửa tên hay trạng thái
+    if (image && !isValidHttpUrl(image) && !/^\/uploads\/(?!.*\.\.)[\w./-]+$/.test(image)) {
       errors[imageField] = 'Đường dẫn phải bắt đầu bằng http:// hoặc https://';
     }
     return errors;

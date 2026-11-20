@@ -4,17 +4,12 @@
  *  - Điều khiển: nút trước/sau, chấm chọn slide; đầy đủ nhãn cho trình đọc màn hình.
  *  - Chỉ hiển thị slide đang chọn nên liên kết ở slide ẩn không bị focus nhầm bằng bàn phím.
  * Nội dung banner là thông điệp chung (không ghi con số giảm giá cụ thể để không sai khi dữ liệu thay đổi).
+ * Hình: slide điện thoại và laptop dùng ảnh nền quảng bá của hãng (client/public/banners, nguồn ghi ở docs/IMAGE_CREDITS.md) phủ lớp tối
+ * để chữ luôn đọc rõ; slide khuyến mãi ghép ảnh sản phẩm thật lên nền chuyển màu. Ảnh lỗi thì tự ẩn, còn lại nền chuyển màu nên chữ vẫn đọc được.
  */
 import { useEffect, useState } from 'react';
 import { Link } from 'react-router-dom';
-import {
-  IconArrowRight,
-  IconChevronLeft,
-  IconChevronRight,
-  IconLaptop,
-  IconPhone,
-  IconTag,
-} from '@techstore/shared';
+import { IconArrowRight, IconChevronLeft, IconChevronRight } from '@techstore/shared';
 
 const AUTOPLAY_MS = 6000;
 
@@ -23,10 +18,15 @@ const SLIDES = [
     id: 'phone',
     eyebrow: 'Điện thoại chính hãng',
     title: 'Flagship mới nhất, trải nghiệm đỉnh cao',
-    text: 'Chọn iPhone, Galaxy và nhiều dòng khác với giá tốt, bảo hành chính hãng 12 tháng.',
+    text: 'Chọn iPhone, Galaxy và nhiều dòng khác với giá tốt, bảo hành chính hãng.',
     cta: { label: 'Xem điện thoại', to: '/san-pham?category=dien-thoai' },
     background: 'from-brand-700 via-brand-600 to-violet-700',
-    Art: IconPhone,
+    // Ảnh đã tối sẵn ở bên trái nên chỉ phủ nhẹ để chữ đọc rõ mà ảnh vẫn nổi
+    image: {
+      src: '/banners/hero-dien-thoai.jpg',
+      fit: 'object-cover object-right',
+      overlay: 'md:from-ink-900/55 md:via-ink-900/15 md:to-transparent',
+    },
   },
   {
     id: 'sale',
@@ -35,7 +35,12 @@ const SLIDES = [
     text: 'Hàng trăm lựa chọn đang được giảm giá. Miễn phí giao hàng cho đơn từ 5.000.000 ₫.',
     cta: { label: 'Xem khuyến mãi', to: '/san-pham?onSale=true' },
     background: 'from-rose-600 via-fuchsia-600 to-brand-700',
-    Art: IconTag,
+    // Ba thiết bị xếp chồng, mỗi cái một cỡ và độ nghiêng để nhìn như bày hàng
+    cutouts: [
+      { src: '/banners/sale-iphone.webp', className: 'z-10 h-60' },
+      { src: '/banners/sale-galaxy.webp', className: '-ml-14 h-52 -rotate-6' },
+      { src: '/banners/sale-watch.webp', className: '-ml-10 h-40 rotate-6' },
+    ],
   },
   {
     id: 'laptop',
@@ -43,10 +48,21 @@ const SLIDES = [
     title: 'Laptop mạnh mẽ cho mọi nhu cầu',
     text: 'Từ mỏng nhẹ văn phòng đến gaming hiệu năng cao, thanh toán khi nhận hàng.',
     cta: { label: 'Xem laptop', to: '/san-pham?category=laptop' },
-    background: 'from-ink-900 via-brand-800 to-accent-500',
-    Art: IconLaptop,
+    background: 'from-black via-black to-ink-900',
+    // Ảnh nền đen, laptop nằm giữa khung: hiện trọn chiều cao ở bên phải và mờ dần sang trái để chữ nằm trên nền đen
+    image: {
+      src: '/banners/hero-laptop.jpg',
+      fit: 'object-contain object-right',
+      fade: true,
+      overlay: 'md:from-transparent md:via-transparent md:to-transparent',
+    },
   },
 ];
+
+// Ảnh không tải được thì ẩn đi để không hiện biểu tượng ảnh vỡ; nền chuyển màu phía sau vẫn đủ để đọc chữ
+const hideBrokenImage = (event) => {
+  event.currentTarget.style.display = 'none';
+};
 
 export default function HeroSlider() {
   const [index, setIndex] = useState(0);
@@ -56,6 +72,14 @@ export default function HeroSlider() {
   const reducedMotion =
     typeof window !== 'undefined' &&
     Boolean(window.matchMedia?.('(prefers-reduced-motion: reduce)').matches);
+
+  useEffect(() => {
+    SLIDES.forEach(({ image, cutouts = [] }) => {
+      [image?.src, ...cutouts.map((item) => item.src)].filter(Boolean).forEach((src) => {
+        new Image().src = src;
+      });
+    });
+  }, []);
 
   useEffect(() => {
     if (paused || reducedMotion) return undefined;
@@ -69,7 +93,6 @@ export default function HeroSlider() {
 
   const go = (target) => setIndex((target + SLIDES.length) % SLIDES.length);
   const slide = SLIDES[index];
-  const { Art } = slide;
 
   return (
     <section
@@ -88,15 +111,43 @@ export default function HeroSlider() {
         aria-label={`${index + 1} trên ${SLIDES.length}`}
         className={`relative bg-gradient-to-br ${slide.background} animate-fade-in`}
       >
-        <div className="bg-tech-grid absolute inset-0 opacity-60" aria-hidden="true" />
-        <div
-          className="absolute -right-24 -top-24 h-96 w-96 rounded-full bg-white/10 blur-3xl"
-          aria-hidden="true"
-        />
-        <div
-          className="absolute -bottom-32 left-1/3 h-80 w-80 rounded-full bg-accent-400/20 blur-3xl"
-          aria-hidden="true"
-        />
+        {slide.image ? (
+          <>
+            <img
+              src={slide.image.src}
+              alt=""
+              aria-hidden="true"
+              fetchPriority={index === 0 ? 'high' : undefined}
+              onError={hideBrokenImage}
+              style={
+                slide.image.fade
+                  ? {
+                      WebkitMaskImage: 'linear-gradient(to right, transparent 5%, #000 40%)',
+                      maskImage: 'linear-gradient(to right, transparent 5%, #000 40%)',
+                    }
+                  : undefined
+              }
+              className={`absolute inset-0 h-full w-full ${slide.image.fit}`}
+            />
+            {/* Lớp tối: đậm đều trên màn hình hẹp vì chữ phủ cả ảnh; từ md trở lên đậm dần về bên trái nơi đặt chữ (mức đậm tùy ảnh) */}
+            <div
+              className={`absolute inset-0 bg-ink-900/60 md:bg-transparent md:bg-gradient-to-r ${slide.image.overlay}`}
+              aria-hidden="true"
+            />
+          </>
+        ) : (
+          <>
+            <div className="bg-tech-grid absolute inset-0 opacity-60" aria-hidden="true" />
+            <div
+              className="absolute -right-24 -top-24 h-96 w-96 rounded-full bg-white/10 blur-3xl"
+              aria-hidden="true"
+            />
+            <div
+              className="absolute -bottom-32 left-1/3 h-80 w-80 rounded-full bg-accent-400/20 blur-3xl"
+              aria-hidden="true"
+            />
+          </>
+        )}
 
         <div className="relative grid items-center gap-6 px-6 py-12 sm:px-20 md:grid-cols-[1.4fr_1fr] md:py-16 lg:py-20">
           <div className="space-y-5">
@@ -116,11 +167,21 @@ export default function HeroSlider() {
             </Link>
           </div>
 
-          {/* Hình trang trí lớn chỉ hiện trên màn hình rộng */}
-          <div className="relative hidden justify-center md:flex" aria-hidden="true">
-            <div className="absolute inset-0 m-auto h-56 w-56 rounded-full bg-white/10 blur-2xl" />
-            <Art size={220} strokeWidth={1} className="relative text-white/90 drop-shadow-2xl" />
-          </div>
+          {/* Ảnh sản phẩm ghép chỉ hiện trên màn hình rộng (slide dùng ảnh nền thì ảnh đã là hình chính) */}
+          {slide.cutouts && (
+            <div className="relative hidden items-end justify-center md:flex" aria-hidden="true">
+              <div className="absolute inset-0 m-auto h-56 w-56 rounded-full bg-white/15 blur-2xl" />
+              {slide.cutouts.map((item) => (
+                <img
+                  key={item.src}
+                  src={item.src}
+                  alt=""
+                  onError={hideBrokenImage}
+                  className={`relative w-auto drop-shadow-2xl ${item.className}`}
+                />
+              ))}
+            </div>
+          )}
         </div>
       </div>
 

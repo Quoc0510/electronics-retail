@@ -12,6 +12,7 @@ import { adminUserRouter, statsRouter } from './adminUser.routes.js'; // [F10]
 import adminReviewRoutes from './adminReview.routes.js'; // [F08]
 import adminCouponRoutes from './adminCoupon.routes.js'; // [F09]
 import productImportRoutes from './productImport.routes.js'; // [F14]
+import adminSettingsRoutes from './adminSettings.routes.js'; // [F16]
 
 const router = Router();
 
@@ -43,5 +44,8 @@ router.use('/reviews', adminReviewRoutes);
 
 // [F09] Quản lý mã giảm giá: /api/admin/coupons
 router.use('/coupons', adminCouponRoutes);
+
+// [F16] Cài đặt cửa hàng (ngưỡng miễn phí vận chuyển): /api/admin/settings/shipping
+router.use('/settings', adminSettingsRoutes);
 
 export default router;
